@@ -31,8 +31,10 @@ de gauche. L'application fonctionne sans Internet : l'indicateur
 Choisissez la période (aujourd'hui, hier, 7 derniers jours, mois en cours).
 Les cartes affichent le chiffre d'affaires net, la marge brute estimée, le
 résultat estimatif de gestion, les créances clients, les dettes fournisseurs et
-la valeur du stock. En dessous : les clients débiteurs, les alertes de stock et
-les dernières ventes. Tous les chiffres proviennent des opérations enregistrées.
+la valeur du stock, puis l'activité à traiter : **commandes à préparer**,
+**livraisons en attente** et **créances échues de plus de 30 jours**. En dessous :
+les clients débiteurs, les alertes de stock et les dernières ventes. Tous les
+chiffres proviennent des opérations enregistrées — aucun n'est saisi à la main.
 
 ## 3. Préparer le catalogue
 
