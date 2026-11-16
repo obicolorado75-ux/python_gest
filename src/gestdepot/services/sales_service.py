@@ -29,14 +29,30 @@ from ..database.models import (
     SaleReturnLine,
 )
 from ..database.session import next_document_number, session_scope
-from ..domain.rules import PAYMENT_METHOD_LABELS, PAYMENT_METHODS
 from ..security import auth
-from . import common
+from . import common, payment_methods
 from .catalog_service import CatalogService
 from .stock_service import StockError, StockService
 
-# moyens de paiement : source unique dans la couche domaine
-PAYMENT_LABELS = dict(PAYMENT_METHOD_LABELS)
+# moyens de paiement : source unique dans la couche domaine, surchargeable par
+# les réglages (§5.12). Résolus à l'import pour les libellés historiques, mais
+# la validation et les listes UI relisent toujours la configuration courante.
+PAYMENT_LABELS = payment_methods.labels()
+
+
+def payment_labels() -> dict[str, str]:
+    """Libellés effectifs (réglages inclus)."""
+    return payment_methods.labels()
+
+
+def payment_methods_available() -> tuple[str, ...]:
+    """Codes de paiement actifs, dans l'ordre configuré."""
+    return payment_methods.codes()
+
+
+def payment_codes() -> tuple[str, ...]:
+    """Alias interne (validation métier)."""
+    return payment_methods.codes()
 
 
 class SalesError(Exception):
@@ -147,7 +163,7 @@ class SalesService:
         if not payments:
             if paid_amount < 0:
                 raise SalesError("Montant encaissé invalide.")
-            if payment_method not in PAYMENT_METHODS:
+            if payment_method not in payment_codes():
                 raise SalesError("Moyen de paiement inconnu.")
             return [{"method": payment_method, "amount": int(paid_amount)}] \
                 if paid_amount else []
@@ -155,7 +171,7 @@ class SalesService:
         for entry in payments:
             method = entry.get("method") or entry.get("payment_method")
             amount = int(entry.get("amount") or 0)
-            if method not in PAYMENT_METHODS:
+            if method not in payment_codes():
                 raise SalesError(f"Moyen de paiement inconnu : {method}")
             if amount < 0:
                 raise SalesError("Un montant encaissé ne peut pas être négatif.")
@@ -203,7 +219,7 @@ class SalesService:
         # moyen principal = celui qui porte le plus gros montant (affichage ticket)
         main_method = (max(settled, key=lambda entry: entry["amount"])["method"]
                        if settled else (payment_method or None))
-        if main_method is not None and main_method not in PAYMENT_METHODS:
+        if main_method is not None and main_method not in payment_codes():
             raise SalesError("Moyen de paiement inconnu.")
 
         prep = self.draft_lines(items, price_list_id, manual_discount)
@@ -344,7 +360,7 @@ class SalesService:
         common.require("payments.create")
         if amount <= 0:
             raise SalesError("Montant de paiement invalide.")
-        if payment_method not in PAYMENT_METHODS:
+        if payment_method not in payment_codes():
             raise SalesError("Moyen de paiement inconnu.")
         user_id = common.current_user_id()
         with session_scope() as s:

@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...domain.rules import PAYMENT_METHODS, label_payment
+from ...services import payment_methods
 from ..widgets import DataTable, Page, info, money, refresh_after
 
 REASON_LABELS = {
@@ -190,8 +190,9 @@ class RefundDialog(QDialog):
         self.quantity = QSpinBox()
         self.quantity.setRange(1, 100_000)
         self.method = QComboBox()
-        for method in PAYMENT_METHODS:
-            self.method.addItem(label_payment(method), method)
+        labels = payment_methods.labels()
+        for method in payment_methods.codes():
+            self.method.addItem(labels[method], method)
         form.addRow("Client", self.customer)
         form.addRow("Emballage", self.packaging)
         form.addRow("Quantité rendue", self.quantity)

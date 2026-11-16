@@ -15,6 +15,8 @@ try:  # les bibliothèques graphiques système peuvent manquer (CI, conteneur)
 except Exception as exc:  # pragma: no cover - dépend de l'environnement
     pytest.skip(f"PySide6 ne peut pas être chargé : {exc}", allow_module_level=True)
 
+from PySide6.QtCore import Qt  # noqa: E402
+
 
 @pytest.fixture(scope="module")
 def qapp():
@@ -457,3 +459,50 @@ def backup_dir_setting(window, tmp_path):
                                             keep_daily=7, keep_weekly=4,
                                             auto_close=True)
     return directory
+
+
+class TestMoyensDePaiementEcran:
+    """§5.12 : moyens de paiement configurables depuis les paramètres."""
+
+    def test_onglet_liste_les_moyens(self, window):
+        window._select("settings")
+        page = window.pages["settings"]
+        page.refresh()
+        codes = [page.payment_list.item(i).data(Qt.UserRole)
+                 for i in range(page.payment_list.count())]
+        assert "especes" in codes and "wave" in codes
+        # Espèces ne peut pas être décoché
+        first = page.payment_list.item(0)
+        assert "Espèces" in first.text()
+
+    def test_ajout_d_un_moyen(self, window):
+        from gestdepot.services import payment_methods
+        window._select("settings")
+        page = window.pages["settings"]
+        page.new_method_label.setText("Airtel Money")
+        page.add_payment_method()
+        assert "airtel_money" in payment_methods.codes()
+        assert page.new_method_label.text() == ""
+
+    def test_decocher_et_enregistrer(self, window):
+        from gestdepot.services import payment_methods
+        window._select("settings")
+        page = window.pages["settings"]
+        page.refresh()
+        for index in range(page.payment_list.count()):
+            item = page.payment_list.item(index)
+            if item.data(Qt.UserRole) == "wave":
+                item.setCheckState(Qt.Unchecked)
+        page.save_payment_methods()
+        assert "wave" not in payment_methods.codes()
+
+    def test_vente_propose_les_moyens_actifs(self, window):
+        from gestdepot.services import payment_methods
+        payment_methods.save([code for code in payment_methods.codes()
+                              if code != "cheque"])
+        page = window.pages["sales"] if "sales" in window.pages else None
+        window._select("sales")
+        page = window.pages["sales"]
+        codes = [page.method_box.itemData(i)
+                 for i in range(page.method_box.count())]
+        assert "cheque" not in codes and "especes" in codes

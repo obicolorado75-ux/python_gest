@@ -19,8 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...domain.rules import PAYMENT_METHOD_LABELS as PAYMENT_LABELS
-from ...domain.rules import PAYMENT_METHODS
+from ...services import payment_methods
 from ..widgets import DataTable, Page, confirm, info, money, refresh_after
 
 MOVEMENT_REASON_LABELS = {
@@ -53,8 +52,9 @@ class ExpenseDialog(QDialog):
         self.amount.setRange(1, 1_000_000_000)
         self.amount.setSingleStep(500)
         self.method = QComboBox()
-        for method in PAYMENT_METHODS:
-            self.method.addItem(PAYMENT_LABELS[method], method)
+        labels = payment_methods.labels()
+        for method in payment_methods.codes():
+            self.method.addItem(labels[method], method)
         self.date = QDateTimeEdit(QDateTime.currentDateTime())
         self.date.setCalendarPopup(True)
         self.date.setDisplayFormat("dd/MM/yyyy HH:mm")
@@ -165,8 +165,9 @@ class MovementDialog(QDialog):
         self.amount.setRange(1, 1_000_000_000)
         self.amount.setSingleStep(500)
         self.method = QComboBox()
-        for method in PAYMENT_METHODS:
-            self.method.addItem(PAYMENT_LABELS[method], method)
+        labels = payment_methods.labels()
+        for method in payment_methods.codes():
+            self.method.addItem(labels[method], method)
         self.comment = QLineEdit()
         self.comment.setPlaceholderText("Motif (obligatoire pour une correction)")
         form.addRow("Opération", self.kind)
@@ -392,7 +393,7 @@ class CashPage(Page):
         else:
             theoretical = cash.theoretical_amount(session.id)
             by_method = cash.movements_by_method(session.id)
-            extra = "  ·  ".join(f"{PAYMENT_LABELS.get(method, method)} "
+            extra = "  ·  ".join(f"{payment_methods.labels().get(method, method)} "
                                  f"{money(amount)}"
                                  for method, amount in by_method.items()
                                  if method != "especes")
@@ -405,7 +406,7 @@ class CashPage(Page):
             self.movements.load([
                 [mv.at.strftime("%d/%m/%Y %H:%M"),
                  "Entrée" if mv.direction == "in" else "Sortie",
-                 money(mv.amount), PAYMENT_LABELS.get(mv.payment_method,
+                 money(mv.amount), payment_methods.labels().get(mv.payment_method,
                                                       mv.payment_method),
                  MOVEMENT_REASON_LABELS.get(mv.reason, mv.reason)]
                 for mv in cash.movements(session.id)],
@@ -416,7 +417,7 @@ class CashPage(Page):
         self._expenses = cash.list_expenses(limit=100)
         self.expenses.load([[exp.number, exp.at.strftime("%d/%m/%Y"),
                              money(exp.amount),
-                             PAYMENT_LABELS.get(exp.payment_method,
+                             payment_methods.labels().get(exp.payment_method,
                                                 exp.payment_method),
                              exp.beneficiary or "—",
                              categories.get(exp.category_id, "—"),

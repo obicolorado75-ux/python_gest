@@ -21,9 +21,10 @@ from ..database.models import (
     SupplierPayment,
 )
 from ..database.session import next_document_number, session_scope
-from ..domain.rules import PAYMENT_METHODS, weighted_avg_cost
+from ..domain.rules import weighted_avg_cost
 from ..security import auth
 from . import common
+from .payment_methods import codes as payment_codes
 
 # Motifs de mouvement autorisés (§5.7)
 MOVEMENT_REASONS = {
@@ -379,7 +380,7 @@ class StockService:
         common.require("suppliers.pay")
         if amount <= 0:
             raise StockError("Montant de paiement invalide.")
-        if payment_method not in PAYMENT_METHODS:
+        if payment_method not in payment_codes():
             raise StockError("Moyen de paiement inconnu.")
         user_id = common.current_user_id()
         with session_scope() as s:

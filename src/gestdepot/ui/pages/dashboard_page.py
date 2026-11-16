@@ -145,7 +145,8 @@ class DashboardPage(Page):
 
         payments = data["payments_by_method"]
         if payments:
-            from ...services.sales_service import PAYMENT_LABELS
+            from ...services import payment_methods
+            PAYMENT_LABELS = payment_methods.labels()
             summary = "Encaissements par moyen de paiement (période) : " + "  ·  ".join(
                 f"{PAYMENT_LABELS.get(key, key)} {money(value)}"
                 for key, value in sorted(payments.items()))

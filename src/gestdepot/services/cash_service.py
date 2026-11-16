@@ -7,9 +7,9 @@ from sqlalchemy import func, select
 
 from ..database.models import CashMovement, CashSession, Expense, ExpenseCategory
 from ..database.session import next_document_number, session_scope
-from ..domain.rules import PAYMENT_METHODS
 from ..security import auth
 from . import common
+from .payment_methods import codes as payment_codes
 
 # motifs de mouvement de caisse admis (§5.12) : les motifs métier sont créés par
 # les services concernés, la saisie manuelle se limite à ces trois-là
@@ -131,7 +131,7 @@ class CashService:
             raise CashError("Sens de mouvement invalide.")
         if amount <= 0:
             raise CashError("Montant de mouvement invalide.")
-        if payment_method not in PAYMENT_METHODS:
+        if payment_method not in payment_codes():
             raise CashError("Moyen de paiement inconnu.")
         if reason not in ("retrait", "apport", "correction"):
             raise CashError(
@@ -230,7 +230,7 @@ class CashService:
         common.require("expenses.create")
         if amount <= 0:
             raise CashError("Montant de dépense invalide.")
-        if payment_method not in PAYMENT_METHODS:
+        if payment_method not in payment_codes():
             raise CashError("Moyen de paiement inconnu.")
         user_id = common.current_user_id()
         with session_scope() as s:

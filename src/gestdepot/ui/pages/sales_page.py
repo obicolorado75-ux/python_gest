@@ -22,7 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 from ...domain.rules import label_status
-from ...services.sales_service import PAYMENT_LABELS, PAYMENT_METHODS, SalesError
+from ...services import payment_methods
+from ...services.sales_service import SalesError
 from ..dialogs.sale_dialogs import (
     CancelSaleDialog,
     HeldSalesDialog,
@@ -163,8 +164,9 @@ class SalesPage(Page):
 
         layout.addWidget(QLabel("Moyen de paiement"))
         self.method_box = QComboBox()
-        for method in PAYMENT_METHODS:
-            self.method_box.addItem(PAYMENT_LABELS[method], method)
+        labels = payment_methods.labels()
+        for method in payment_methods.codes():
+            self.method_box.addItem(labels[method], method)
         layout.addWidget(self.method_box)
 
         paid_row = QHBoxLayout()
@@ -486,7 +488,7 @@ class SalesPage(Page):
         if index >= 0:
             self.method_box.setCurrentIndex(index)
         self.method_box.blockSignals(False)
-        detail = " + ".join(f"{PAYMENT_LABELS.get(entry['method'], entry['method'])} "
+        detail = " + ".join(f"{payment_methods.labels().get(entry['method'], entry['method'])} "
                             f"{money(entry['amount'])}" for entry in payments)
         self.lbl_detail.setText(f"Encaissements : {detail}")
         self._update_change()

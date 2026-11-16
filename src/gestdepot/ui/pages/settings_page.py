@@ -1,6 +1,7 @@
 """Paramètres, utilisateurs, audit et sauvegarde/restauration (§5.16, §8)."""
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -10,6 +11,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
     QSpinBox,
@@ -74,6 +77,7 @@ class SettingsPage(Page):
         self._build_company_tab()
         self._build_users_tab()
         self._build_backup_tab()
+        self._build_payments_tab()
         self._build_audit_tab()
 
     # --- dépôt ---------------------------------------------------------------
@@ -194,6 +198,88 @@ class SettingsPage(Page):
         layout.addWidget(self.backups_table, 1)
         self.tabs.addTab(tab, "Sauvegarde")
 
+    # --- moyens de paiement (§5.12) ----------------------------------------------
+    def _build_payments_tab(self) -> None:
+
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        hint = QLabel(
+            "Cochez les moyens de paiement proposés à la caisse et dans les "
+            "encaissements. « Espèces » reste toujours disponible. Un moyen "
+            "déjà utilisé dans l'historique ne peut pas être supprimé de la "
+            "base : il n'est plus proposé, mais reste lisible dans les anciens "
+            "documents.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #5f6b7a;")
+        layout.addWidget(hint)
+
+        self.payment_list = QListWidget()
+        self.payment_list.setMaximumHeight(240)
+        layout.addWidget(self.payment_list)
+
+        add_row = QHBoxLayout()
+        self.new_method_label = QLineEdit()
+        self.new_method_label.setPlaceholderText("Nouveau moyen (ex. : Airtel Money)")
+        add_row.addWidget(self.new_method_label, 1)
+        add_row.addWidget(QPushButton("Ajouter", clicked=self.add_payment_method))
+        layout.addLayout(add_row)
+
+        actions = QHBoxLayout()
+        actions.addWidget(QPushButton("Enregistrer les moyens de paiement",
+                                      clicked=self.save_payment_methods))
+        actions.addStretch(1)
+        layout.addLayout(actions)
+        layout.addStretch(1)
+        self.tabs.addTab(tab, "Moyens de paiement")
+
+    def _reload_payment_methods(self) -> None:
+        from ...services import payment_methods
+
+        self.payment_list.clear()
+        labels = payment_methods.labels()
+        for code in payment_methods.codes():
+            item = QListWidgetItem(labels.get(code, code))
+            item.setData(Qt.UserRole, code)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked)
+            if code in payment_methods.REQUIRED_METHODS:
+                item.setFlags(item.flags() & ~Qt.ItemIsUserCheckable)
+                item.setToolTip("Moyen obligatoire : toujours proposé.")
+            self.payment_list.addItem(item)
+
+    def add_payment_method(self) -> None:
+        from ...services import payment_methods
+
+        label = self.new_method_label.text().strip()
+        if not label:
+            QMessageBox.information(self, "Moyens de paiement",
+                                    "Saisissez d'abord un libellé.")
+            return
+        try:
+            payment_methods.add(label, label)
+        except Exception as exc:
+            QMessageBox.warning(self, "Moyens de paiement", str(exc))
+            return
+        self.new_method_label.clear()
+        self._reload_payment_methods()
+
+    @refresh_after
+    def save_payment_methods(self):
+        from ...services import payment_methods
+
+        checked = []
+        for index in range(self.payment_list.count()):
+            item = self.payment_list.item(index)
+            if item.checkState() == Qt.Checked:
+                checked.append(item.data(Qt.UserRole))
+        try:
+            payment_methods.save(checked)
+        except Exception as exc:
+            QMessageBox.warning(self, "Moyens de paiement", str(exc))
+            return False
+        info(self, "Moyens de paiement enregistrés.", "Paramètres")
+        return True
+
     # --- audit ------------------------------------------------------------------
     def _build_audit_tab(self) -> None:
         tab = QWidget()
@@ -210,6 +296,7 @@ class SettingsPage(Page):
         self.phone_edit.setText(settings.phone or "")
         self.address_edit.setText(settings.address or "")
         self.footer_edit.setText(settings.document_footer or "")
+        self._reload_payment_methods()
 
         self._users = admin.list_users()
         self.users_table.load([[user.username, user.full_name or "—",

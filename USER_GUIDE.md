@@ -244,6 +244,19 @@ Onglet **Sauvegarde** des paramètres :
 Limite expliquée à l'écran : l'application étant hors ligne, aucune sauvegarde
 automatique ne peut s'exécuter si le poste est éteint ou l'application fermée.
 
+## 11 ter. Moyens de paiement
+
+![Moyens de paiement](docs/captures/settings_payments.png)
+
+Onglet **Moyens de paiement** des paramètres : cochez les moyens proposés à la
+caisse et dans tous les encaissements (ventes, clients, fournisseurs, consignes,
+dépenses). « Espèces » est toujours proposé — c'est le moyen qui alimente la
+caisse physique. Pour ajouter un opérateur non listé (Airtel Money, Moov Flooz…),
+saisissez son nom puis **Ajouter** ; le code interne est dérivé du libellé.
+
+Décocher un moyen ne supprime aucune donnée : il n'est plus proposé à la saisie,
+mais les ventes et mouvements existants restent lisibles avec leur libellé.
+
 ## 12. En cas de problème
 
 - **Message « Permission refusée »** : votre rôle ne permet pas cette action ;

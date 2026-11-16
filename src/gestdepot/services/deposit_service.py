@@ -5,9 +5,9 @@ from sqlalchemy import func, select
 
 from ..database.models import CashMovement, Customer, DepositMovement, ReturnablePackaging, Supplier
 from ..database.session import session_scope
-from ..domain.rules import PAYMENT_METHODS
 from ..security import auth
 from . import common
+from .payment_methods import codes as payment_codes
 
 # Motifs : sens positif = l'emballage est chez le client / reçu du fournisseur
 DEPOSIT_REASONS = {
@@ -199,7 +199,7 @@ class DepositService:
         common.require("deposits.manage")
         if quantity <= 0:
             raise DepositError("Quantité à rembourser invalide.")
-        if payment_method not in PAYMENT_METHODS:
+        if payment_method not in payment_codes():
             raise DepositError("Moyen de paiement inconnu.")
         user_id = common.current_user_id()
         with session_scope() as s:

@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...domain.rules import label_payment
-from ...services.sales_service import PAYMENT_LABELS, PAYMENT_METHODS
+from ...services import payment_methods
 from ..widgets import DataTable, money
 
 REFUND_MODES = [("Espèces", "especes"), ("Avoir", "avoir"), ("Autre", "autre")]
@@ -46,8 +46,9 @@ class SplitPaymentDialog(QDialog):
         self.amount_spins: list[QSpinBox] = []
         for index in range(3):
             method = QComboBox()
-            for code in PAYMENT_METHODS:
-                method.addItem(PAYMENT_LABELS[code], code)
+            labels = payment_methods.labels()
+            for code in payment_methods.codes():
+                method.addItem(labels[code], code)
             amount = QSpinBox()
             amount.setRange(0, 1_000_000_000)
             amount.setSingleStep(500)

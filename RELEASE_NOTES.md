@@ -32,6 +32,20 @@
   réenregistrée dans l'historique de la base restaurée — l'opérateur retrouve
   toujours de quoi revenir en arrière.
 
+### Ajouté (moyens de paiement configurables, §5.12)
+
+- Nouveau module `services/payment_methods.py` : liste effective des moyens de
+  paiement résolue depuis `app_settings` (clé `payments.methods`), libellés
+  personnalisés (`code|libellé`), « Espèces » obligatoire, audit
+  `payment_methods_update`.
+- **Tous** les points de saisie utilisent la configuration courante : caisse
+  (vente, paiements mixtes, dépenses, mouvements), clients, consignes et achats.
+- Nouvel onglet **Moyens de paiement** dans les paramètres : cases à cocher,
+  ajout d'un opérateur libre, enregistrement. Décocher un moyen ne supprime
+  aucune donnée historique (il n'est simplement plus proposé).
+- La validation métier (`sales`, `cash`, `deposits`, `purchases`) refuse un
+  moyen inconnu ou désactivé.
+
 ### Corrigé
 
 - Après une restauration, la base restaurée ne connaissait pas la copie de
@@ -156,7 +170,7 @@
 - **Rapports** : tableau de bord, marges, exports Excel et PDF.
 - **Sauvegarde** : copie cohérente via l'API SQLite, contrôle d'intégrité,
   empreinte SHA-256, restauration protégée par authentification et vérification.
-- **Tests** : 187 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
+- **Tests** : 191 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
   retours, achats/consignes, migrations et mise à niveau automatique, atomicité,
   schéma, exports, tickets, interface).
 

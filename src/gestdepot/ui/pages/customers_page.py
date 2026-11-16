@@ -15,8 +15,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...domain.rules import PAYMENT_METHOD_LABELS as PAYMENT_LABELS
-from ...domain.rules import PAYMENT_METHODS
+from ...services import payment_methods
 from ..widgets import DataTable, Page, confirm, money, refresh_after
 
 
@@ -113,8 +112,9 @@ class PaymentDialog(QDialog):
         self.amount.setSingleStep(500)
         self.amount.setValue(max(customer.balance, 1))
         self.method = QComboBox()
-        for method in PAYMENT_METHODS:
-            self.method.addItem(PAYMENT_LABELS[method], method)
+        labels = payment_methods.labels()
+        for method in payment_methods.codes():
+            self.method.addItem(labels[method], method)
         form.addRow("Montant", self.amount)
         form.addRow("Moyen de paiement", self.method)
         layout.addLayout(form)

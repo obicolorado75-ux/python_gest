@@ -18,7 +18,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...domain.rules import PAYMENT_METHODS, label_payment
+from ...domain.rules import label_payment
+from ...services import payment_methods
 from ..widgets import DataTable, Page, info, money, refresh_after
 
 ORDER_STATUS_LABELS = {"draft": "Brouillon", "confirmed": "Confirmée",
@@ -315,8 +316,9 @@ class SupplierPaymentDialog(QDialog):
         self.amount.setSingleStep(500)
         self.amount.setValue(max(supplier.balance, 1))
         self.method = QComboBox()
-        for method in PAYMENT_METHODS:
-            self.method.addItem(label_payment(method), method)
+        labels = payment_methods.labels()
+        for method in payment_methods.codes():
+            self.method.addItem(labels[method], method)
         self.invoice = QComboBox()
         self.invoice.addItem("Toutes les factures (affectation globale)", None)
         for invoice in services["stock"].supplier_invoices(supplier.id, only_due=True):
