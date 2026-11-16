@@ -17,7 +17,7 @@ consulter ou imprimer.
 | Base locale | SQLite dans le répertoire de données utilisateur, clés étrangères actives, journal WAL, migrations Alembic |
 | Sécurité | Connexion Argon2id, rôles et permissions vérifiés dans les services, journal d'audit, désactivation sans suppression |
 | Catalogue | Produits, catégories, marques, unités, **conditionnements configurables** (ex. 1 casier = 24), listes de tarifs, historique des coûts, import contrôlé |
-| Stock | Journal immuable des mouvements, soldes et CMP mobile, alertes de seuil, rapprochement journal/soldes, inventaires avec régularisation tracée |
+| Stock | Journal immuable des mouvements, soldes et CMP mobile, alertes de seuil, rapprochement journal/soldes, inventaires global ou ciblé avec seuil de contrôle des écarts et régularisation tracée |
 | Consignes | Emballages configurables, remises/retours clients et fournisseurs, comptes de consigne en quantité et en valeur, remboursements tracés |
 | Achats | Fournisseurs, commandes avec remise et frais d'approche répartis dans le coût, réceptions partielles avec refus, factures, paiements fournisseurs, historique et réouverture auditée |
 | Ventes | Écran de saisie rapide, panier multi-conditionnements, remises, ventes à crédit avec plafond, paiements mixtes, ventes suspendues/reprises (F8), retours et annulations tracés |

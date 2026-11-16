@@ -344,3 +344,69 @@ class TestCaisseEcran:
         dialog.reason.setText("Billet retrouvé")
         dialog._save()
         assert cash.get_session(closed.id).difference == 0
+
+
+class TestInventaireEcran:
+    """§5.13 : écran inventaires — périmètre, comptage, contrôle, validation."""
+
+    def test_dialogue_demarrage_global_et_cible(self, window, stocked_product):
+        from gestdepot.ui.pages.inventory_page import StartInventoryDialog
+        dialog = StartInventoryDialog(window.services)
+        assert dialog.payload()["product_ids"] is None      # global par défaut
+        dialog.scope.setCurrentIndex(1)                     # ciblé
+        from PySide6.QtCore import Qt
+        dialog.products.item(0).setCheckState(Qt.Checked)
+        payload = dialog.payload()
+        assert payload["product_ids"] == [dialog.products.item(0).data(Qt.UserRole)]
+        assert payload["threshold_value"] == 5_000
+
+    def test_ecran_inventaire_comptage_et_validation(self, window, stock,
+                                                     inventory, product_with_casier):
+        product, _ = product_with_casier
+        stock.initial_stock(product.id, 30, unit_cost=100)
+        session = inventory.start_session(product_ids=[product.id])
+        window._select("inventory")
+        page = window.pages["inventory"]
+        page.refresh()
+        assert page.sessions.rowCount() == 1
+        assert page.table.rowCount() == 1
+        assert page.table.value(0, 1) == 30
+        page._current = session
+        page._load_lines(session)
+        page.table.selectRow(0)
+        inventory.set_counted(session.id, product.id, 29)
+        page.refresh()
+        page._current = session
+        page._load_lines(session)
+        assert page.table.value(0, 3) == -1
+
+    def test_dialogue_comptage_controle_obligatoire(self, window, stock,
+                                                   inventory, product_with_casier):
+        from gestdepot.ui.pages.inventory_page import CountDialog
+        product, _ = product_with_casier
+        stock.initial_stock(product.id, 100, unit_cost=100)
+        session = inventory.start_session(product_ids=[product.id],
+                                          threshold_value=1_000)
+        line = inventory.lines(session.id)[0]
+        dialog = CountDialog(window.services, inventory.get_session(session.id),
+                             line, "Soda")
+        dialog.counted.setValue(50)     # écart 5 000 > seuil
+        assert "contrôle obligatoire" in dialog.gap.text()
+        dialog.comment.setText("Casse importante")
+
+    def test_validation_bloquee_par_le_seuil_dans_l_ecran(self, window, stock,
+                                                          inventory,
+                                                          product_with_casier):
+        product, _ = product_with_casier
+        stock.initial_stock(product.id, 100, unit_cost=100)
+        session = inventory.start_session(product_ids=[product.id],
+                                          threshold_value=1_000)
+        inventory.set_counted(session.id, product.id, 10)
+        window._select("inventory")
+        page = window.pages["inventory"]
+        page.refresh()
+        page._current = inventory.get_session(session.id)
+        page._load_lines(page._current)
+        page.validate()                 # bloqué : message, pas de validation
+        assert inventory.get_session(session.id).status != "validated"
+        assert page.table.value(0, 6) == "À contrôler"

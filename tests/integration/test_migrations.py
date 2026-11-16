@@ -9,7 +9,7 @@ from gestdepot.database.models import Base
 from gestdepot.database.session import reset_for_tests
 
 # révision de tête attendue : à mettre à jour avec la dernière migration
-MIGRATION_HEAD = "2053a78bdf38"
+MIGRATION_HEAD = "75b49f9d7032"
 
 
 def _alembic(database: str, *arguments: str) -> subprocess.CompletedProcess:

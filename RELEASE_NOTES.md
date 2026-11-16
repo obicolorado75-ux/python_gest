@@ -13,6 +13,25 @@
 | 6 — Sécurité, sauvegarde | 🟡 partiel | audit, permissions, sauvegarde/restauration vérifiées ; permissions fines par action et tests de régression à étendre |
 | 7 — Packaging | ⬜ à faire | scripts de construction fournis, installateurs à produire sur Windows/macOS |
 
+## v0.1.4 — inventaires contrôlés (16 novembre 2026)
+
+### Ajouté
+
+- **Inventaire ciblé ou global** : sélection des produits à compter, seuil de
+  contrôle des écarts paramétrable par session (migration `75b49f9d7032`).
+- **Comptage horodaté** (`counted_at`), statuts `draft → counting → reviewed →
+  validated` et `cancelled`.
+- **Contrôle des écarts importants** (§5.13 étape 6) : `check_control` liste les
+  lignes dont l'écart de valeur dépasse le seuil ; `review_gap` enregistre le
+  constat (commentaire obligatoire, audit `inventory_gap_review`) ; la validation
+  est refusée tant qu'un écart au-dessus du seuil n'est pas contrôlé. Un nouveau
+  comptage annule le contrôle précédent.
+- **Abandon motivé** d'un inventaire non validé (`cancel_session`, audit), sans
+  effet sur le stock ; un inventaire validé se corrige uniquement par un nouvel
+  inventaire (régularisation non destructive).
+- **Traçabilité de la validation** : `validated_at`, `validated_by`, écarts et
+  coûts conservés sur les lignes.
+
 ## v0.1.3 — caisse et dépenses complètes (16 novembre 2026)
 
 ### Ajouté
@@ -113,7 +132,7 @@
 - **Rapports** : tableau de bord, marges, exports Excel et PDF.
 - **Sauvegarde** : copie cohérente via l'API SQLite, contrôle d'intégrité,
   empreinte SHA-256, restauration protégée par authentification et vérification.
-- **Tests** : 146 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
+- **Tests** : 169 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
   retours, achats/consignes, migrations et mise à niveau automatique, atomicité,
   schéma, exports, tickets, interface).
 

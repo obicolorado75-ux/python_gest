@@ -177,9 +177,25 @@ session.
 
 ## 9. Inventaires
 
-Menu **Inventaires** : **Nouvel inventaire** fige le stock théorique. Saisissez
-les quantités comptées, puis **Valider** : les écarts génèrent des mouvements de
-correction tracés. Un inventaire validé n'est plus modifiable.
+![Inventaires](docs/captures/inventory.png)
+
+1. **Nouvel inventaire** : choisissez le périmètre (tous les produits ou une
+   sélection cochée) et le **seuil de contrôle** en FCFA (5 000 par défaut).
+2. Le stock théorique et le coût moyen pondéré sont figés au démarrage : ils ne
+   bougent plus même si des ventes ont lieu pendant le comptage.
+3. **Saisir le comptage** (double-clic sur une ligne) : saisissez la quantité
+   réellement comptée. L'écart en quantité et en valeur s'affiche ; au-delà du
+   seuil, le dialogue signale que le contrôle est obligatoire.
+4. **Contrôler les écarts** : pour chaque écart important, saisissez un constat
+   (vol, casse, erreur de saisie…). Tant qu'un écart au-dessus du seuil n'est pas
+   contrôlé, la validation est bloquée.
+5. **Valider l'inventaire** : des mouvements de régularisation sont générés pour
+   chaque écart. La session conserve le théorique, le compté, l'écart, le coût,
+   l'utilisateur et la date — rien n'est effacé.
+6. Un inventaire validé n'est plus modifiable : pour corriger, créez un **nouvel
+   inventaire** (régularisation), la validation d'origine restant consultable.
+7. **Abandonner** : un inventaire non validé peut être abandonné avec un motif ;
+   il ne touche pas au stock et reste visible avec le statut « Abandonné ».
 
 ## 10. Rapports et exports
 

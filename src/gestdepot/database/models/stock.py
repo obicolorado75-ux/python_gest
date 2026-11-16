@@ -1,7 +1,17 @@
 """Stock, lots, inventaires (§6.3)."""
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -42,9 +52,17 @@ class InventorySession(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     number: Mapped[str] = mapped_column(String(30), unique=True)  # INV-2026-000001
     at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
-    status: Mapped[str] = mapped_column(String(20), default="draft")  # draft, validated
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    # draft → counting → reviewed (contrôle des écarts) → validated ;
+    # une session validée n'est plus modifiable : seule une nouvelle
+    # régularisation (nouvel inventaire) peut corriger (§5.13)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     comment: Mapped[str | None] = mapped_column(Text)
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    validated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    # écart de valeur au-delà duquel un contrôle est exigé (§5.13 étape 6)
+    threshold_value: Mapped[int] = mapped_column(Integer, default=0)
+    review_note: Mapped[str | None] = mapped_column(Text)
 
 
 class InventoryLine(Base):
@@ -56,6 +74,10 @@ class InventoryLine(Base):
     theoretical_qty: Mapped[int] = mapped_column(Integer)  # stock théorique au démarrage
     counted_qty: Mapped[int] = mapped_column(Integer)
     cost: Mapped[int] = mapped_column(Integer)             # coût retenu, XOF
+    counted_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # contrôle des écarts importants (§5.13 étape 6)
+    reviewed: Mapped[bool] = mapped_column(Boolean, default=False)
+    review_comment: Mapped[str | None] = mapped_column(Text)
 
 
 class ProductBatch(Base):

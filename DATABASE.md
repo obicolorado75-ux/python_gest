@@ -41,6 +41,12 @@ Base : **SQLite** locale, fichier unique dans le répertoire de données utilisa
 `stock_movements`, `stock_balances`, `inventory_sessions`, `inventory_lines`,
 `product_batches`.
 
+- `inventory_sessions.status` : `draft`, `counting`, `reviewed`, `validated`,
+  `cancelled` ; `validated_at` / `validated_by` figent la validation.
+- `inventory_sessions.threshold_value` : seuil d'écart de valeur exigeant un
+  contrôle ; `inventory_lines.reviewed` / `review_comment` / `counted_at`
+  conservent le comptage et son contrôle.
+
 - `stock_movements.quantity` est **signée** ; motifs autorisés :
   `mouvement_initial`, `reception`, `sortie_vente`, `retour_client`,
   `retour_fournisseur`, `casse`, `perte`, `peremption`, `correction_inventaire`.
@@ -115,6 +121,8 @@ alembic -x url=sqlite:///./dev.db check           # vérifie l'absence de diverg
 - `c25937c56bfc` ajoute remise/frais d'approche sur les commandes, le coût
   « landed » des lignes et le commentaire des paiements fournisseurs.
 - `2053a78bdf38` ajoute les corrections de caisse et l'annulation de dépenses.
+- `75b49f9d7032` ajoute le contrôle des écarts d'inventaire et la traçabilité
+  de validation.
 - `render_as_batch=True` : les modifications de colonnes sont possibles sur SQLite.
 - Au démarrage, l'application crée la base si besoin puis **applique les
   migrations en attente** (`init_engine` → `upgrade_database`) : une nouvelle
