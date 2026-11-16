@@ -79,8 +79,10 @@ un fichier douteux.
 
 1. Sauvegarde manuelle + copie sur support externe.
 2. Notez la version de l'application.
-3. Installez la nouvelle version ; au premier démarrage, appliquez les migrations
-   (`alembic upgrade head` en ligne de commande si nécessaire).
+3. Installez la nouvelle version et lancez-la : les migrations en attente sont
+   appliquées automatiquement au démarrage (une base ancienne est reconnue et
+   rattachée à la version courante). `alembic upgrade head` reste disponible pour
+   une intervention manuelle.
 4. Vérifiez le catalogue, un stock et une vente de test.
 
 ### Procédure après incident

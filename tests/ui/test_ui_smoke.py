@@ -59,8 +59,9 @@ class TestFenetrePrincipale:
 
     def test_ecrans_vides_geres(self, window):
         """Les états vides ne doivent pas lever d'exception."""
-        for key in ("dashboard", "sales", "products", "stock", "customers",
-                    "purchases", "cash", "inventory", "reports", "settings"):
+        for key in ("dashboard", "sales", "products", "stock", "deposits",
+                    "customers", "purchases", "cash", "inventory", "reports",
+                    "settings"):
             window._select(key)
             window.pages[key].refresh()
 
@@ -216,3 +217,66 @@ class TestCaisseEtendue:
         dialog._save()
         assert dialog.return_number.startswith("RET-")
         assert sales.returnable_lines(sale.id)[0]["remaining"] == 2
+
+
+class TestAchatsEtConsignes:
+    """§5.11 / §5.8 : écrans achats (paiement, historique) et consignes."""
+
+    def test_ecran_consignes_alimente(self, window, deposit, sales):
+        customer = sales.create_customer(code="CLI-UI", name="Bar UI")
+        packaging = deposit.create_packaging("CAS-UI", "Casier UI", 500)
+        deposit.move(packaging.id, 4, "remis_client", customer_id=customer.id)
+        window._select("deposits")
+        page = window.pages["deposits"]
+        page.refresh()
+        assert page.types.rowCount() == 1
+        assert page.accounts.rowCount() == 1
+        assert page.accounts.value(0, 3) == 4
+        assert page.movements.rowCount() == 1
+
+    def test_ecran_consignes_vide(self, window):
+        window._select("deposits")
+        page = window.pages["deposits"]
+        page.refresh()
+        assert page.types.rowCount() == 0
+
+    def test_dialogue_mouvement_consigne(self, window, deposit, sales, monkeypatch):
+        from gestdepot.ui.pages.deposits_page import MovementDialog
+        customer = sales.create_customer(code="CLI-UI2", name="Bar UI 2")
+        packaging = deposit.create_packaging("CAS-UI2", "Casier UI 2", 300)
+        dialog = MovementDialog(window.services)
+        dialog.packaging.setCurrentIndex(dialog.packaging.findData(packaging.id))
+        dialog.reason.setCurrentIndex(dialog.reason.findData("remis_client"))
+        dialog.party.setCurrentIndex(dialog.party.findData(customer.id))
+        dialog.quantity.setValue(6)
+        dialog._save()
+        assert deposit.customer_balance(customer.id)[packaging.id] == 6
+
+    def test_ecran_achats_paiement_fournisseur(self, window, stock, cash,
+                                               supplier, product_with_casier):
+        product, _ = product_with_casier
+        order = stock.create_purchase_order(
+            supplier.id, [{"product_id": product.id, "designation": product.name,
+                           "quantity": 10, "unit_cost": 100}])
+        stock.receive(order.id, [{"order_line_id": order.lines[0].id,
+                                  "quantity": 10}])
+        window._select("purchases")
+        page = window.pages["purchases"]
+        page.refresh()
+        assert page.suppliers.rowCount() == 1
+        payment = stock.pay_supplier(supplier.id, 300)
+        assert payment.amount == 300
+        assert stock.get_supplier(supplier.id).balance == 700
+        page.refresh()
+        assert page.suppliers.rowCount() == 1
+
+    def test_historique_achats_affiche_commandes(self, window, stock, supplier,
+                                                product_with_casier):
+        from gestdepot.ui.pages.purchases_page import PurchaseOrderHistoryDialog
+        product, _ = product_with_casier
+        stock.create_purchase_order(
+            supplier.id, [{"product_id": product.id, "designation": product.name,
+                           "quantity": 3, "unit_cost": 100}])
+        dialog = PurchaseOrderHistoryDialog(window.services)
+        assert dialog.orders.rowCount() == 1
+        assert dialog.invoices.rowCount() == 0

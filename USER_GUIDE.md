@@ -44,13 +44,45 @@ Menu **Produits et catalogue** :
 
 Menu **Achats et réapprovisionnement** :
 
-1. **Nouveau fournisseur** si nécessaire.
-2. **Nouvelle commande** : produit, quantité en unités de base, prix convenu.
-   Une commande **ne modifie pas le stock**.
-3. **Réceptionner** : saisissez les quantités réellement reçues. Seules ces
-   quantités entrent en stock ; le reliquat reste ouvert pour une réception
-   ultérieure. Une facture fournisseur et le solde dû sont créés.
-4. L'onglet **À réapprovisionner** propose les produits sous seuil.
+![Achats](docs/captures/purchases.png)
+
+1. **Nouveau fournisseur** si nécessaire (code, raison sociale, contact,
+   conditions, délai habituel).
+2. **Nouvelle commande** : produit, quantité en unités de base, prix convenu,
+   plus une **remise** et des **frais d'approche** (transport, autres frais).
+   Une commande **ne modifie pas le stock**. Les frais sont répartis au prorata
+   des lignes et ajoutés au coût de chaque article à la réception : le coût moyen
+   pondéré intègre donc le transport réel.
+3. **Réceptionner** : saisissez les quantités réellement reçues, les quantités
+   refusées et le coût constaté. Seules ces quantités entrent en stock ; le
+   reliquat reste ouvert pour une réception ultérieure. Une facture fournisseur
+   et le solde dû sont créés.
+4. **Payer le fournisseur** (onglet Fournisseurs) : montant, moyen de paiement et
+   facture éventuelle. Le solde dû diminue ; seules les espèces sortent de la
+   caisse ouverte.
+5. **Historique des achats** : commandes (annulation avec motif, réouverture
+   auditée d'une commande soldée), paiements et factures avec reste dû.
+6. L'onglet **À réapprovisionner** propose les produits sous seuil ; la
+   proposition reste à valider par le gérant.
+
+## 4 bis. Consignes et emballages
+
+![Consignes](docs/captures/deposits.png)
+
+Menu **Consignes et emballages** : les emballages sont suivis séparément des
+boissons, leur valeur n'entre pas dans le chiffre d'affaires.
+
+1. **Nouvel emballage** : code, libellé, capacité et consigne unitaire
+   (par exemple un casier consigné 500 FCFA).
+2. **Mouvement** : remis au client, retourné par le client, reçu du fournisseur,
+   rendu au fournisseur, cassé/perdu ou ajustement. Un retour supérieur au solde
+   détenu par le client (ou dû au fournisseur) est refusé.
+3. Onglet **Comptes clients** : quantité et valeur dues par client.
+4. Onglet **Mouvements** : historique complet, avec le document d'origine.
+5. **Rembourser une consigne** : le remboursement sort de la caisse sans créer de
+   chiffre d'affaires.
+6. Les consignes facturées lors d'une vente restent visibles dans l'écran de
+   vente (bloc « Consigne ») et alimentent les mêmes comptes.
 
 ## 5. Vendre
 

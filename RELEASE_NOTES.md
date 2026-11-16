@@ -6,12 +6,47 @@
 |---|---|---|
 | 0 — Cadrage et prototype | ✅ fait | dépôt, base locale, fenêtre principale, lancement hors ligne, tests |
 | 1 — Fondations et catalogue | ✅ fait (P0) | architecture en couches, migrations, connexion, utilisateurs/rôles, paramètres, catégories, marques, unités, conditionnements, produits, tarifs, import contrôlé |
-| 2 — Stocks, achats | 🟡 P0 livré | journal immuable, soldes, CMP, fournisseurs, commandes, réceptions, inventaires ; consignes : service + écran partiel |
+| 2 — Stocks, achats | ✅ P0 livré | journal immuable, soldes, CMP, fournisseurs, commandes (remise + frais d'approche), réceptions avec refus, paiements fournisseurs, inventaires, consignes et emballages |
 | 3 — Caisse et ventes | ✅ P0 livré | POS, panier, tarifs, remises, paiements mixtes, crédit, retours, annulations, ventes suspendues (F8), ticket |
 | 4 — Clients, livraisons, finances | 🟡 partiel | clients, crédits, relevés, paiements affectés, sessions de caisse, dépenses ; livraisons et commandes clients à faire (P1) |
 | 5 — Inventaires, analyses, rapports | 🟡 P0 livré | inventaires guidés, tableau de bord, marges, exports Excel/PDF ; rapports spécialisés à compléter |
 | 6 — Sécurité, sauvegarde | 🟡 partiel | audit, permissions, sauvegarde/restauration vérifiées ; permissions fines par action et tests de régression à étendre |
 | 7 — Packaging | ⬜ à faire | scripts de construction fournis, installateurs à produire sur Windows/macOS |
+
+## v0.1.2 — achats et consignes complets (16 novembre 2026)
+
+### Ajouté
+
+- **Commandes d'achat** : remise négociée et frais d'approche (transport,
+  autres frais) répartis au prorata des lignes ; le coût « landed » est figé sur
+  chaque ligne et utilisé lors de la réception, donc intégré au CMP.
+- **Réceptions** : quantités reçues, quantités **refusées** et coût constaté
+  modifiable, commentaire de réception (table `purchase_orders`,
+  `purchase_order_lines`, migration `c25937c56bfc`).
+- **Paiements fournisseurs** (`StockService.pay_supplier`) : solde dû réduit,
+  rattachement optionnel à une facture, mouvement de caisse par moyen ;
+  permission `suppliers.pay`.
+- **Historique des achats** : commandes (y compris soldées/annulées), paiements,
+  factures avec reste dû ; annulation motivée et **réouverture auditée** d'une
+  commande soldée (`cancel_order`, `reopen_order`).
+- **Écran Consignes et emballages** (§5.8, jusque-là absent) : types
+  d'emballages, mouvements client/fournisseur (remis, retourné, reçu, rendu,
+  cassé, ajusté), comptes de consigne en quantité et en valeur, remboursement de
+  consigne tracé en caisse (`deposits.manage`), solde dû au fournisseur par type.
+- Moyens de paiement déplacés dans la couche domaine (`domain.rules.PAYMENT_METHODS`)
+  pour être partagés par les ventes, la caisse, les achats et les consignes.
+
+### Corrigé
+
+- **Mise à niveau des bases existantes** : le schéma n'était créé qu'au premier
+  démarrage (`create_all`) et les migrations Alembic n'étaient jamais appliquées,
+  si bien qu'une base d'une version antérieure provoquait une erreur
+  (`no such column`) et bloquait l'application. `init_engine` applique désormais
+  `upgrade_database` : base neuve → `stamp` de la tête, base existante → `upgrade`,
+  base antérieure à Alembic → adoption puis tête. Test de non-régression ajouté
+  (0,2 s au premier démarrage, aucune action ensuite).
+- Une commande d'achat nouvellement créée expose correctement ses lignes
+  (objets détachés après commit).
 
 ## v0.1.1 — caisse complète (16 novembre 2026)
 
@@ -54,8 +89,9 @@
 - **Rapports** : tableau de bord, marges, exports Excel et PDF.
 - **Sauvegarde** : copie cohérente via l'API SQLite, contrôle d'intégrité,
   empreinte SHA-256, restauration protégée par authentification et vérification.
-- **Tests** : 93 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
-  retours, atomicité, schéma, exports, tickets, interface).
+- **Tests** : 119 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
+  retours, achats/consignes, migrations et mise à niveau automatique, atomicité,
+  schéma, exports, tickets, interface).
 
 ### Corrigé pendant cette étape
 

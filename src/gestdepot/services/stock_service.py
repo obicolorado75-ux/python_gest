@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database.models import (
+    CashMovement,
     GoodsReceipt,
     GoodsReceiptLine,
     Product,
@@ -17,9 +18,10 @@ from ..database.models import (
     StockMovement,
     Supplier,
     SupplierInvoice,
+    SupplierPayment,
 )
 from ..database.session import next_document_number, session_scope
-from ..domain.rules import weighted_avg_cost
+from ..domain.rules import PAYMENT_METHODS, weighted_avg_cost
 from ..security import auth
 from . import common
 
@@ -205,21 +207,29 @@ class StockService:
     # --- commandes d'achat (§5.11) ---------------------------------------
     def create_purchase_order(self, supplier_id: int, lines: list[dict],
                               expected_date: date | None = None,
-                              comment: str | None = None) -> PurchaseOrder:
+                              comment: str | None = None,
+                              discount: int = 0, other_fees: int = 0,
+                              freight_fees: int = 0) -> PurchaseOrder:
         """Une commande d'achat seule ne modifie JAMAIS le stock (§5.11).
 
         lines : [{product_id, packaging_id, designation, quantity (unités de base),
                   quantity_display, unit_cost}]
+        discount : remise globale négociée (FCFA)
+        freight_fees / other_fees : frais d'approche, répartis au prorata des
+        montants de ligne lors de la réception (méthode configurable §5.11).
         """
         common.require("stock.receive")
         if not lines:
             raise StockError("Commande vide.")
+        if discount < 0 or freight_fees < 0 or other_fees < 0:
+            raise StockError("Remise ou frais négatifs interdits.")
         with session_scope() as s:
             if s.get(Supplier, supplier_id) is None:
                 raise StockError("Fournisseur introuvable.")
             number = next_document_number(s, "ACH")
             total = 0
             prepared = []
+            rate = 0
             for line in lines:
                 product = s.get(Product, line["product_id"])
                 if product is None:
@@ -239,14 +249,33 @@ class StockService:
                     "quantity_display": int(line.get("quantity_display") or 1),
                     "unit_cost": cost,
                 })
+            charges = freight_fees + other_fees
+            if charges and not total:
+                raise StockError("Frais d'approche impossibles sur une commande "
+                                 "de montant nul.")
+            # remise plafonnée au montant des lignes
+            gross = total
+            applied_discount = min(discount, gross)
+            # coefficient appliqué au coût convenu de chaque ligne : il répartit
+            # la remise et les frais d'approche au prorata des montants de ligne
+            # (somme des coûts « landed » × quantités = total de la commande)
+            factor = (gross - applied_discount + charges) / gross if gross else 1
+            rate = factor
+            total = gross - applied_discount + charges
             po = PurchaseOrder(number=number, supplier_id=supplier_id,
                                status="confirmed", total_amount=total,
                                expected_date=expected_date, comment=comment,
+                               discount_amount=applied_discount,
+                               freight_fees=freight_fees, other_fees=other_fees,
                                user_id=common.current_user_id())
             s.add(po)
             s.flush()
             for line in prepared:
-                s.add(PurchaseOrderLine(order_id=po.id, **line))
+                line["landed_cost"] = round(line["unit_cost"] * rate)
+                # alimentation de la collection en mémoire : la commande reste
+                # lisible (lignes comprises) après fermeture de la session
+                po.lines.append(PurchaseOrderLine(**line))
+            s.flush()
             auth.log("purchase_order_create", "PurchaseOrder", po.id,
                      new_value=f"{number}={total}", session=s)
             return po
@@ -300,7 +329,10 @@ class StockService:
                 if qty > remaining:
                     raise StockError(
                         f"Réception ({qty}) supérieure au reliquat ({remaining}).")
-                cost = int(r.get("unit_cost", line.unit_cost) or 0)
+                # coût retenu = coût constaté, à défaut coût convenu majoré des
+                # frais d'approche répartis (§5.11)
+                default_cost = line.landed_cost or line.unit_cost
+                cost = int(r.get("unit_cost", default_cost) or 0)
                 if cost < 0:
                     raise StockError("Coût de réception invalide.")
                 s.add(GoodsReceiptLine(
@@ -332,6 +364,140 @@ class StockService:
             auth.log("goods_receipt", "GoodsReceipt", gr.id,
                      new_value=f"{number}={total}", session=s)
             return gr
+
+    # --- paiements fournisseurs (§5.11, §5.12) ----------------------------
+    def pay_supplier(self, supplier_id: int, amount: int,
+                     payment_method: str = "especes",
+                     invoice_id: int | None = None,
+                     comment: str | None = None) -> SupplierPayment:
+        """Règlement partiel ou total d'un fournisseur.
+
+        Le solde dû diminue sans toucher au stock ; les espèces sortent de la
+        session de caisse ouverte et un mouvement de caisse est enregistré pour
+        chaque moyen (seules les espèces changent le solde physique, §5.12).
+        """
+        common.require("suppliers.pay")
+        if amount <= 0:
+            raise StockError("Montant de paiement invalide.")
+        if payment_method not in PAYMENT_METHODS:
+            raise StockError("Moyen de paiement inconnu.")
+        user_id = common.current_user_id()
+        with session_scope() as s:
+            supplier = s.get(Supplier, supplier_id)
+            if supplier is None:
+                raise StockError("Fournisseur introuvable.")
+            if amount > supplier.balance:
+                raise StockError(
+                    f"Le paiement ({amount}) dépasse le solde dû ({supplier.balance}).")
+            invoice = None
+            if invoice_id:
+                invoice = s.get(SupplierInvoice, invoice_id)
+                if invoice is None or invoice.supplier_id != supplier_id:
+                    raise StockError("Facture fournisseur introuvable.")
+                outstanding = invoice.total_amount - invoice.paid_amount
+                if amount > outstanding:
+                    raise StockError(
+                        f"Le paiement dépasse le reste dû de la facture "
+                        f"({outstanding}).")
+            payment = SupplierPayment(supplier_id=supplier_id, amount=amount,
+                                      payment_method=payment_method,
+                                      invoice_id=invoice_id,
+                                      comment=comment, user_id=user_id,
+                                      cash_session_id=None)
+            s.add(payment)
+            supplier.balance -= amount
+            if invoice is not None:
+                invoice.paid_amount += amount
+            cash_session = common.open_cash_session(s, user_id)
+            if cash_session is not None:
+                payment.cash_session_id = cash_session.id
+                s.add(CashMovement(session_id=cash_session.id, direction="out",
+                                   amount=amount, payment_method=payment_method,
+                                   reason="paiement_fournisseur",
+                                   document_type="supplier_payment",
+                                   document_id=payment.id, user_id=user_id))
+            s.flush()
+            auth.log("supplier_payment", "SupplierPayment", payment.id,
+                     new_value=f"{supplier.code}={amount}", comment=comment,
+                     session=s)
+            return payment
+
+    def list_payments(self, supplier_id: int | None = None, limit: int = 200):
+        with session_scope() as s:
+            q = select(SupplierPayment).order_by(SupplierPayment.at.desc(),
+                                                 SupplierPayment.id.desc()).limit(limit)
+            if supplier_id:
+                q = q.where(SupplierPayment.supplier_id == supplier_id)
+            return list(s.scalars(q))
+
+    def list_purchase_orders(self, limit: int = 200, status: str | None = None):
+        """Toutes les commandes, y compris soldées et annulées (§5.11)."""
+        with session_scope() as s:
+            q = (select(PurchaseOrder)
+                 .order_by(PurchaseOrder.ordered_at.desc(), PurchaseOrder.id.desc())
+                 .limit(limit))
+            if status:
+                q = q.where(PurchaseOrder.status == status)
+            return list(s.scalars(q))
+
+    def purchased_by_supplier(self) -> dict[int, int]:
+        """Cumul des réceptions validées par fournisseur (historique des achats)."""
+        with session_scope() as s:
+            rows = s.execute(
+                select(GoodsReceipt.supplier_id, func.coalesce(func.sum(
+                    GoodsReceipt.total_amount), 0))
+                .group_by(GoodsReceipt.supplier_id)).all()
+            return {supplier_id: int(total or 0) for supplier_id, total in rows}
+
+    def supplier_invoices(self, supplier_id: int | None = None, only_due: bool = False):
+        with session_scope() as s:
+            q = select(SupplierInvoice).order_by(SupplierInvoice.at.desc(),
+                                                 SupplierInvoice.id.desc())
+            if supplier_id:
+                q = q.where(SupplierInvoice.supplier_id == supplier_id)
+            rows = list(s.scalars(q))
+        if only_due:
+            rows = [inv for inv in rows if inv.total_amount > inv.paid_amount]
+        return rows
+
+    # --- annulation / réouverture d'une commande (§5.11) ------------------
+    def cancel_order(self, order_id: int, reason: str) -> None:
+        """Annule une commande non réceptionnée ; jamais de suppression muette."""
+        common.require("stock.receive")
+        if not (reason or "").strip():
+            raise StockError("Le motif d'annulation est obligatoire.")
+        with session_scope() as s:
+            po = s.get(PurchaseOrder, order_id)
+            if po is None:
+                raise StockError("Commande introuvable.")
+            if po.status in ("received", "cancelled"):
+                raise StockError("Commande déjà soldée ou annulée.")
+            po.status = "cancelled"
+            auth.log("purchase_order_cancel", "PurchaseOrder", order_id,
+                     new_value=po.number, comment=reason, session=s)
+
+    def reopen_order(self, order_id: int, reason: str) -> None:
+        """Rouvre une commande soldée par erreur : date d'effet + audit (§7.2).
+
+        Le reliquat réapparaît pour une réception ultérieure ; rien n'est modifié
+        sur les réceptions déjà validées.
+        """
+        common.require("stock.receive")
+        if not (reason or "").strip():
+            raise StockError("Le motif de réouverture est obligatoire.")
+        with session_scope() as s:
+            po = s.get(PurchaseOrder, order_id)
+            if po is None:
+                raise StockError("Commande introuvable.")
+            if po.status not in ("received", "cancelled"):
+                raise StockError("Seule une commande soldée ou annulée peut être "
+                                 "rouverte.")
+            lines = list(s.scalars(select(PurchaseOrderLine).where(
+                PurchaseOrderLine.order_id == order_id)))
+            received_any = any(line.received_qty > 0 for line in lines)
+            po.status = "partially_received" if received_any else "confirmed"
+            auth.log("purchase_order_reopen", "PurchaseOrder", order_id,
+                     new_value=po.number, comment=reason, session=s)
 
     # --- alertes et rapprochement ----------------------------------------
     def low_stock_products(self):

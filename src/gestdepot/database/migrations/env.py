@@ -15,7 +15,10 @@ target_metadata = Base.metadata
 
 
 def _database_url() -> str:
-    """Base utilisateur par défaut, surchargée par -x url=... ou sqlalchemy.url."""
+    """URL de la base : attribut programmatique, -x url=..., sinon base utilisateur."""
+    override = config.attributes.get("url")
+    if override:
+        return override
     override = context.get_x_argument(as_dictionary=True).get("url")
     if override:
         return override

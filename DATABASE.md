@@ -68,6 +68,13 @@ Base : **SQLite** locale, fichier unique dans le répertoire de données utilisa
 
 - Une commande ne touche jamais le stock ; seule une réception validée l'augmente.
 - `purchase_order_lines.received_qty` porte le reliquat des réceptions partielles.
+- `purchase_orders.discount_amount`, `freight_fees`, `other_fees` : remise et
+  frais d'approche ; `purchase_order_lines.landed_cost` fige le coût réel
+  (convenu × coefficient de répartition) utilisé pour le CMP.
+- `goods_receipt_lines.quantity_refused` conserve les quantités refusées à la
+  réception.
+- `supplier_payments` (avec `comment`) et `supplier_invoices.paid_amount`
+  déterminent le solde dû, mis à jour par `StockService.pay_supplier`.
 
 ### Consignes, livraisons, caisse
 `returnable_packaging`, `deposit_movements`, `deliveries`, `delivery_lines`,
@@ -100,9 +107,15 @@ alembic -x url=sqlite:///./dev.db check           # vérifie l'absence de diverg
 - La révision initiale `ff962e37ee63` crée l'ensemble du schéma.
 - `92b311107557` ajoute `sale_payments` et `held_sales` (paiements mixtes et
   ventes suspendues).
+- `c25937c56bfc` ajoute remise/frais d'approche sur les commandes, le coût
+  « landed » des lignes et le commentaire des paiements fournisseurs.
 - `render_as_batch=True` : les modifications de colonnes sont possibles sur SQLite.
-- Au démarrage, l'application vérifie/crée le schéma ; en production, appliquez
-  `alembic upgrade head` avant de lancer une nouvelle version.
+- Au démarrage, l'application crée la base si besoin puis **applique les
+  migrations en attente** (`init_engine` → `upgrade_database`) : une nouvelle
+  version met à niveau une base existante sans manipulation. Une base créée
+  avant l'introduction d'Alembic est reconnue et rattachée à la révision de tête
+  (`stamp`) sans perte de données. Faites une sauvegarde avant toute mise à jour
+  (§8) ; `alembic upgrade head` reste disponible pour une intervention manuelle.
 
 ## Sauvegarde et intégrité
 

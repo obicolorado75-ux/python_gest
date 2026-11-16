@@ -18,7 +18,8 @@ consulter ou imprimer.
 | Sécurité | Connexion Argon2id, rôles et permissions vérifiés dans les services, journal d'audit, désactivation sans suppression |
 | Catalogue | Produits, catégories, marques, unités, **conditionnements configurables** (ex. 1 casier = 24), listes de tarifs, historique des coûts, import contrôlé |
 | Stock | Journal immuable des mouvements, soldes et CMP mobile, alertes de seuil, rapprochement journal/soldes, inventaires avec régularisation tracée |
-| Achats | Fournisseurs, commandes d'achat, réceptions partielles ou totales, facture et solde fournisseur, suggestions de réappro |
+| Consignes | Emballages configurables, remises/retours clients et fournisseurs, comptes de consigne en quantité et en valeur, remboursements tracés |
+| Achats | Fournisseurs, commandes avec remise et frais d'approche répartis dans le coût, réceptions partielles avec refus, factures, paiements fournisseurs, historique et réouverture auditée |
 | Ventes | Écran de saisie rapide, panier multi-conditionnements, remises, ventes à crédit avec plafond, paiements mixtes, ventes suspendues/reprises (F8), retours et annulations tracés |
 | Clients | Fiche, plafond de crédit, relevé de compte, règlements partiels (le CA n'est pas recalculé) |
 | Caisse | Ouverture, mouvements, dépenses, clôture avec écart conservé ; espèces séparées du Mobile Money |
@@ -30,11 +31,12 @@ consulter ou imprimer.
 | Écran | Capture |
 |---|---|
 | Tableau de bord | `docs/captures/dashboard.png` |
+| Achats et réapprovisionnement | `docs/captures/purchases.png` |
+| Consignes et emballages | `docs/captures/deposits.png` |
 | Ventes / Caisse | `docs/captures/sales.png` |
 | Produits et catalogue | `docs/captures/products.png` |
 | Stocks et mouvements | `docs/captures/stock.png` |
 | Clients et crédits | `docs/captures/customers.png` |
-| Achats et réapprovisionnement | `docs/captures/purchases.png` |
 | Caisse et dépenses | `docs/captures/cash.png` |
 | Inventaires | `docs/captures/inventory.png` |
 | Marges et rapports | `docs/captures/reports.png` |
@@ -131,8 +133,8 @@ valident les règles et enregistrent les opérations en une seule transaction.
 ## Limites connues de cette étape
 
 - Un seul poste : pas de partage réseau simultané (§2.3).
-- Consignes, livraisons et commandes clients : modèle de données prêt, écrans
-  partiels (priorité P1).
+- Livraisons et commandes clients : modèle de données prêt, écrans à construire
+  (priorité P1).
 - Chiffrement applicatif de la base non activé : utiliser BitLocker/FileVault
   (§8.4).
 - Les installateurs Windows/macOS doivent être produits **sur** leur plateforme

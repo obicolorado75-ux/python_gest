@@ -30,6 +30,7 @@ from ..services.stock_service import StockService
 from .pages.cash_page import CashPage
 from .pages.customers_page import CustomersPage
 from .pages.dashboard_page import DashboardPage
+from .pages.deposits_page import DepositsPage
 from .pages.inventory_page import InventoryPage
 from .pages.products_page import ProductsPage
 from .pages.purchases_page import PurchasesPage
@@ -43,6 +44,7 @@ NAVIGATION = [
     ("Ventes / Caisse", "sales", "Vendre et encaisser"),
     ("Produits et catalogue", "products", "Produits, conditionnements, tarifs"),
     ("Stocks et mouvements", "stock", "Stock et journal des mouvements"),
+    ("Consignes et emballages", "deposits", "Emballages et comptes de consigne"),
     ("Clients et crédits", "customers", "Clients, créances, règlements"),
     ("Achats et réapprovisionnement", "purchases", "Fournisseurs et réceptions"),
     ("Caisse et dépenses", "cash", "Sessions de caisse et dépenses"),
@@ -56,6 +58,7 @@ PAGES = {
     "sales": SalesPage,
     "products": ProductsPage,
     "stock": StockPage,
+    "deposits": DepositsPage,
     "customers": CustomersPage,
     "purchases": PurchasesPage,
     "cash": CashPage,
@@ -163,7 +166,7 @@ class MainWindow(QMainWindow):
     def _build_sidebar(self) -> QWidget:
         side = QFrame()
         side.setObjectName("Sidebar")
-        side.setFixedWidth(250)
+        side.setFixedWidth(272)
         side.setStyleSheet("#Sidebar {background: #f4f6f9; border-right: 1px solid #dde3ea;}")
         layout = QVBoxLayout(side)
         layout.setContentsMargins(10, 12, 10, 12)
@@ -176,7 +179,7 @@ class MainWindow(QMainWindow):
             button.setCursor(Qt.PointingHandCursor)
             button.setStyleSheet(
                 "QPushButton {text-align: left; padding: 9px 12px; border: none;"
-                " border-radius: 6px; color: #23303c;}"
+                " border-radius: 6px; color: #23303c; font-size: 12px;}"
                 "QPushButton:hover {background: #e4eaf1;}"
                 "QPushButton:checked {background: #12324f; color: white;"
                 " font-weight: 600;}")

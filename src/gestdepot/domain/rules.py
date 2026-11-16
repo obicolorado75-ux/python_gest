@@ -68,6 +68,9 @@ SALE_STATUS_LABELS = {
     "cancelled": "Annulée",
 }
 
+PAYMENT_METHODS = ("especes", "orange_money", "mtn_money", "moov_money", "wave",
+                   "virement", "cheque", "autre")
+
 PAYMENT_METHOD_LABELS = {
     "especes": "Espèces",
     "orange_money": "Orange Money",

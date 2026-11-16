@@ -29,24 +29,14 @@ from ..database.models import (
     SaleReturnLine,
 )
 from ..database.session import next_document_number, session_scope
+from ..domain.rules import PAYMENT_METHOD_LABELS, PAYMENT_METHODS
 from ..security import auth
 from . import common
 from .catalog_service import CatalogService
 from .stock_service import StockError, StockService
 
-PAYMENT_METHODS = ["especes", "orange_money", "mtn_money", "moov_money", "wave",
-                   "virement", "cheque", "autre"]
-
-PAYMENT_LABELS = {
-    "especes": "Espèces",
-    "orange_money": "Orange Money",
-    "mtn_money": "MTN Mobile Money",
-    "moov_money": "Moov Money",
-    "wave": "Wave",
-    "virement": "Virement bancaire",
-    "cheque": "Chèque",
-    "autre": "Autre",
-}
+# moyens de paiement : source unique dans la couche domaine
+PAYMENT_LABELS = dict(PAYMENT_METHOD_LABELS)
 
 
 class SalesError(Exception):

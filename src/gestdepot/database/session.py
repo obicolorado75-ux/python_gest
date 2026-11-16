@@ -1,15 +1,19 @@
 """Session SQLAlchemy, création de la base et amorçage (Phase 0→1).
 
 La base est créée automatiquement au premier démarrage dans le répertoire de
-données utilisateur (§4.4). Les migrations Alembic sont appliquées si elles sont
-disponibles ; à défaut le schéma est créé directement (prototype Phase 0).
+données utilisateur (§4.4). Les migrations Alembic sont ensuite vérifiées et
+appliquées à chaque démarrage : une nouvelle version de l'application met donc
+à niveau les bases existantes sans manipulation (les sauvegardes sont faites
+avant, §8).
 """
 from __future__ import annotations
 
 import datetime as dt
+import sys
 from contextlib import contextmanager
+from pathlib import Path
 
-from sqlalchemy import create_engine, event, select
+from sqlalchemy import create_engine, event, inspect, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -47,8 +51,56 @@ def _make_engine(url: str) -> Engine:
     return engine
 
 
+ALEMBIC_INI = Path(__file__).resolve().parents[3] / "alembic.ini"
+MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
+# En mode figé (exécutable PyInstaller), les migrations sont embarquées.
+BUNDLED_MIGRATIONS_DIR = Path(sys._MEIPASS) / "gestdepot_migrations" \
+    if getattr(sys, "_MEIPASS", None) else None
+
+
+def _alembic_config(url: str):
+    from alembic.config import Config
+    cfg = Config(str(ALEMBIC_INI) if ALEMBIC_INI.exists() else None)
+    cfg.set_main_option("script_location",
+                        str(BUNDLED_MIGRATIONS_DIR or MIGRATIONS_DIR))
+    cfg.set_main_option("sqlalchemy.url", url)
+    # env.py lit cet attribut en priorité : les migrations s'appliquent à la base
+    # réellement ouverte par l'application, jamais à une base de développement
+    cfg.attributes["url"] = url
+    return cfg
+
+
+def _database_state(engine: Engine) -> str:
+    """'empty', 'unmanaged' (tables sans version) ou 'managed' (alembic_version)."""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "alembic_version" in tables:
+        return "managed"
+    return "unmanaged" if tables else "empty"
+
+
+def upgrade_database(engine: Engine, url: str | None = None) -> None:
+    """Applique les migrations Alembic à une base existante (§4.1, §8).
+
+    Une base créée par ``create_all`` avant l'introduction des migrations est
+    « adoptée » (stamp de la révision de base) puis mise à niveau : c'est ce qui
+    garantit qu'une nouvelle version de l'application retrouve ses données avec
+    les colonnes ajoutées, sans intervention manuelle.
+    """
+    from alembic import command
+    state = _database_state(engine)
+    if state == "empty":
+        return
+    cfg = _alembic_config(url or str(engine.url))
+    if state == "unmanaged":
+        Base.metadata.create_all(engine)  # tables manquantes éventuelles
+        command.stamp(cfg, "head")
+        return
+    command.upgrade(cfg, "head")
+
+
 def init_engine(url: str | None = None) -> Engine:
-    """Initialise le moteur et garantit l'existence du schéma."""
+    """Initialise le moteur, garantit le schéma et applique les migrations."""
     global _engine, _SessionLocal
     if url is None:
         app_paths.ensure_dirs()
@@ -58,6 +110,9 @@ def init_engine(url: str | None = None) -> Engine:
     _engine = _make_engine(url)
     _SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False, future=True)
     Base.metadata.create_all(_engine)
+    # base neuve : create_all a créé le schéma complet → on le rattache à head,
+    # base existante : upgrade des migrations en attente
+    upgrade_database(_engine, url)
     with _SessionLocal() as s:
         seed_reference_data(s)
     return _engine
@@ -116,6 +171,8 @@ DEFAULT_PERMISSIONS: dict[str, str] = {
     "customers.manage": "Gérer les clients",
     "customers.credit_override": "Dépasser un plafond de crédit",
     "suppliers.manage": "Gérer les fournisseurs",
+    "suppliers.pay": "Régler un fournisseur",
+    "deposits.manage": "Gérer les consignes et emballages",
     "deliveries.manage": "Gérer les livraisons",
     "payments.create": "Encaisser un paiement",
     "reports.view": "Consulter les rapports",
@@ -131,7 +188,8 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
     "Gérant": ["sales.create", "sales.discount", "sales.cancel", "sales.return",
                "catalog.manage", "stock.receive", "stock.adjust", "inventory.manage",
                "cash.open", "cash.close", "expenses.create", "customers.manage",
-               "customers.credit_override", "suppliers.manage", "deliveries.manage",
+               "customers.credit_override", "suppliers.manage", "suppliers.pay",
+               "deposits.manage", "deliveries.manage",
                "payments.create", "reports.view", "audit.view"],
     "Caissier": ["sales.create", "cash.open", "cash.close", "payments.create",
                  "reports.view"],
