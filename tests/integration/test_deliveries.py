@@ -277,3 +277,38 @@ class TestBonDeLivraison:
         with session_scope() as s:
             documents = list(s.scalars(select(GeneratedDocument)))
         assert documents and documents[0].document_type == "bon_livraison"
+
+
+class TestIndicateursLivraison:
+    """§5.4 : commandes à préparer, livraisons en attente, crédits échus."""
+
+    def test_compteurs_dans_le_tableau_de_bord(self, delivery, reporting, customer,
+                                               item, stocked_product, admin):
+        from gestdepot.services.reporting_service import Period
+        order = delivery.create_order(customer.id, [item], reserve_stock=False)
+        delivery.confirm_order(order.id)
+        delivery.plan_delivery(order.id, driver="Yao")
+        data = reporting.dashboard(Period.today())
+        assert data["orders_to_prepare"] == 1
+        assert data["deliveries_pending"] == 1
+        assert data["overdue_credit"] == 0
+
+    def test_credit_echu_compte(self, delivery, reporting, sales, customer,
+                                stocked_product, admin):
+        from datetime import datetime, timedelta
+
+        from sqlalchemy import update
+
+        from gestdepot.database.models import Sale
+        from gestdepot.database.session import session_scope
+        from gestdepot.services.reporting_service import Period
+        product, _ = stocked_product
+        sale = sales.confirm_sale(
+            items=[{"product_id": product.id, "packaging_id": None,
+                    "quantity_display": 2}],
+            paid_amount=0, customer_id=customer.id, price_list_id=None)
+        with session_scope() as s:
+            s.execute(update(Sale).where(Sale.id == sale.id).values(
+                at=datetime.now() - timedelta(days=45)))
+        data = reporting.dashboard(Period.today())
+        assert data["overdue_credit"] > 0

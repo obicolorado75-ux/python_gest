@@ -69,13 +69,14 @@ class TestFenetrePrincipale:
             window.pages[key].refresh()
 
     def test_dashboard_affiche_indicateurs(self, window, stocked_product):
-        """Les 6 cartes existent et sont mises à jour sans se dupliquer (§5.4)."""
+        """Les cartes existent et sont mises à jour sans se dupliquer (§5.4)."""
         window._select("dashboard")
         page = window.pages["dashboard"]
-        assert page.cards_grid.count() == 6
+        expected = len(page.CARD_TITLES)              # 6 indicateurs + 3 (§5.4)
+        assert page.cards_grid.count() == expected == 9
         page.refresh()
         page.refresh()
-        assert page.cards_grid.count() == 6          # aucune carte recréée
+        assert page.cards_grid.count() == expected    # aucune carte recréée
         assert page.cards["net_sales"].value_label.text().endswith("FCFA")
 
     def test_dashboard_avec_ventes_et_depenses(self, window, sales, cash,

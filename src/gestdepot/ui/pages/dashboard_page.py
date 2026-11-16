@@ -86,6 +86,9 @@ class DashboardPage(Page):
         ("receivables", "Créances clients"),
         ("payables", "Dettes fournisseurs"),
         ("stock_value", "Valeur du stock"),
+        ("orders_to_prepare", "Commandes à préparer"),
+        ("deliveries_pending", "Livraisons en attente"),
+        ("overdue_credit", "Créances échues (+30 j)"),
     ]
 
     def _build_cards(self) -> None:
@@ -108,10 +111,17 @@ class DashboardPage(Page):
             "receivables": "Soldes clients ouverts",
             "payables": "Soldes fournisseurs ouverts",
             "stock_value": f"{data['products_count']} produits suivis",
+            "orders_to_prepare": "Commandes confirmées non encore prêtes",
+            "deliveries_pending": "Tournées planifiées, en route ou en préparation",
+            "overdue_credit": "Reste dû sur les ventes de plus de 30 jours",
         }
+        money_keys = {"net_sales", "gross_margin", "estimated_result",
+                      "receivables", "payables", "stock_value", "overdue_credit"}
         for key, _title in self.CARD_TITLES:
             widget = self.cards[key]
-            widget.value_label.setText(money(data[key]))
+            value = data[key]
+            widget.value_label.setText(money(value) if key in money_keys
+                                       else str(value))
             widget.hint_label.setText(hints[key])
 
     def refresh(self) -> None:

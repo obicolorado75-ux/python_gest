@@ -39,6 +39,9 @@
   « Commandes et livraisons » à deux onglets.
 - `SalesService.prepare_sale()` factorise les contrôles de vente ; `draft_lines`
   accepte un prix négocié de commande.
+- **Tableau de bord §5.4 complété** : trois cartes supplémentaires —
+  commandes à préparer, livraisons en attente, créances échues de plus de
+  30 jours.
 
 ## v0.1.5 — politique de sauvegarde pilotable (16 novembre 2026)
 
@@ -214,7 +217,7 @@
 - **Rapports** : tableau de bord, marges, exports Excel et PDF.
 - **Sauvegarde** : copie cohérente via l'API SQLite, contrôle d'intégrité,
   empreinte SHA-256, restauration protégée par authentification et vérification.
-- **Tests** : 245 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
+- **Tests** : 247 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
   retours, achats/consignes, migrations et mise à niveau automatique, atomicité,
   schéma, exports, tickets, interface).
 

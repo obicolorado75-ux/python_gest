@@ -11,7 +11,9 @@ from sqlalchemy import func, select
 from ..database.models import (
     CashMovement,
     Customer,
+    CustomerOrder,
     CustomerPayment,
+    Delivery,
     Expense,
     Sale,
     SaleLine,
@@ -86,6 +88,20 @@ class ReportingService:
             payables = int(s.scalar(
                 select(func.coalesce(func.sum(Supplier.balance), 0))
                 .where(Supplier.active.is_(True))) or 0)
+            # §5.4 : activité de livraison et crédits échus
+            orders_to_prepare = int(s.scalar(
+                select(func.count(CustomerOrder.id)).where(
+                    CustomerOrder.status.in_(("confirmed", "preparing")))) or 0)
+            deliveries_pending = int(s.scalar(
+                select(func.count(Delivery.id)).where(
+                    Delivery.status.in_(("pending", "preparing",
+                                         "in_transit")))) or 0)
+            overdue_credit = int(s.scalar(
+                select(func.coalesce(func.sum(Sale.total_amount
+                                              - Sale.paid_amount), 0))
+                .where(Sale.status == "confirmed",
+                       Sale.total_amount > Sale.paid_amount,
+                       Sale.at < period.start - timedelta(days=30))) or 0)
             payments = s.execute(
                 select(CustomerPayment.payment_method,
                        func.coalesce(func.sum(CustomerPayment.amount), 0))
@@ -120,6 +136,9 @@ class ReportingService:
             "low_stock": [a for a in alerts if a["status"] == "sous_seuil"],
             "out_of_stock": [a for a in alerts if a["status"] == "rupture"],
             "products_count": len(stock.stock_levels()),
+            "orders_to_prepare": orders_to_prepare,
+            "deliveries_pending": deliveries_pending,
+            "overdue_credit": overdue_credit,
         }
 
     def sales_by_day(self, period: Period):
