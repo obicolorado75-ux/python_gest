@@ -1,10 +1,11 @@
 """Fournisseurs, achats, réceptions, factures, paiements (§6.6)."""
 from datetime import datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+from .catalog import Product  # noqa: F401  (annotation de relation)
 
 
 class Supplier(Base):
@@ -50,7 +51,7 @@ class PurchaseOrderLine(Base):
     received_qty: Mapped[int] = mapped_column(Integer, default=0)
 
     order: Mapped["PurchaseOrder"] = relationship(back_populates="lines")
-    product: Mapped["Product"] = relationship()
+    product: Mapped["Product"] = relationship(lazy="joined")
 
 
 class GoodsReceipt(Base):

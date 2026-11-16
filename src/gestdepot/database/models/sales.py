@@ -1,10 +1,11 @@
 """Clients, ventes, retours, paiements (§6.5)."""
 from datetime import datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+from .catalog import PriceList  # noqa: F401  (annotation de relation)
 
 
 class Customer(Base):
@@ -21,7 +22,7 @@ class Customer(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
-    price_list: Mapped["PriceList | None"] = relationship()
+    price_list: Mapped["PriceList | None"] = relationship(lazy="joined")
 
 
 class Sale(Base):
@@ -42,7 +43,7 @@ class Sale(Base):
     note: Mapped[str | None] = mapped_column(Text)
 
     lines: Mapped[list["SaleLine"]] = relationship(back_populates="sale", lazy="selectin")
-    customer: Mapped["Customer | None"] = relationship()
+    customer: Mapped["Customer | None"] = relationship(lazy="joined")
 
 
 class SaleLine(Base):
@@ -94,7 +95,9 @@ class CustomerPayment(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     number: Mapped[str] = mapped_column(String(30), unique=True)
     at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), index=True)
-    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    # NULL = encaissement au comptoir (vente sans client identifié)
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"),
+                                                    index=True)
     amount: Mapped[int] = mapped_column(Integer)
     payment_method: Mapped[str] = mapped_column(String(40), default="especes")
     cash_session_id: Mapped[int | None] = mapped_column(ForeignKey("cash_sessions.id"))

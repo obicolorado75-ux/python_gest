@@ -1,10 +1,11 @@
 """Stock, lots, inventaires (§6.3)."""
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+from .catalog import Product  # noqa: F401  (annotation de relation)
 
 
 class StockMovement(Base):

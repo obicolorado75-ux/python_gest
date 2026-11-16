@@ -58,3 +58,36 @@ def weighted_avg_cost(current_qty: int, current_avg: int, incoming_qty: int,
     if total_qty <= 0:
         return 0
     return round((current_qty * current_avg + incoming_qty * incoming_cost) / total_qty)
+
+
+SALE_STATUS_LABELS = {
+    "draft": "Brouillon",
+    "confirmed": "Confirmée",
+    "partially_returned": "Partiellement retournée",
+    "returned": "Retournée",
+    "cancelled": "Annulée",
+}
+
+PAYMENT_METHOD_LABELS = {
+    "especes": "Espèces",
+    "orange_money": "Orange Money",
+    "mtn_money": "MTN Mobile Money",
+    "moov_money": "Moov Money",
+    "wave": "Wave",
+    "virement": "Virement bancaire",
+    "cheque": "Chèque",
+    "autre": "Autre",
+}
+
+
+def label_status(status: str | None) -> str:
+    """Traduit un statut technique en libellé français (§5.1)."""
+    if not status:
+        return "—"
+    return SALE_STATUS_LABELS.get(status, status)
+
+
+def label_payment(method: str | None) -> str:
+    if not method:
+        return "—"
+    return PAYMENT_METHOD_LABELS.get(method, method)
