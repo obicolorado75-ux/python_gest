@@ -66,6 +66,10 @@ Menu **Ventes / Caisse** :
 5. Choisissez le moyen de paiement (**F6**) : espèces, Orange Money, MTN, Moov,
    Wave, virement, chèque.
 6. Saisissez le montant encaissé (ou **Tout encaisser**) puis **Valider (F9)**.
+7. **Paiement mixte** : le bouton ouvre la répartition du règlement sur plusieurs
+   moyens (par exemple 5 000 en espèces + le reste par Wave). Chaque encaissement
+   est numéroté et mouvemente la caisse avec son propre moyen ; le montant total
+   ne peut pas dépasser le dû (le rendu de monnaie n'est pas encaissé).
 
 Règles appliquées :
 
@@ -75,6 +79,15 @@ Règles appliquées :
   autorisation du responsable ;
 - le prix, la désignation, l'unité et le coût sont figés dans la vente ;
 - une vente confirmée ne peut pas être supprimée : elle est annulée ou retournée.
+
+**Modifier la quantité** d'une ligne (ou mettre 0 pour la retirer) et
+**Retirer la ligne** agissent sur le panier sans rien écrire en base.
+
+**Suspendre la vente (F8)** met le panier de côté sans toucher au stock, à la
+caisse ni aux créances : aucun document n'est numéroté. **Ventes suspendues**
+liste les paniers en attente, permet d'en **reprendre** un (il revient dans
+l'écran de vente, prêt à être validé) ou d'en **abandonner** un (l'abandon est
+inscrit au journal d'audit).
 
 **Imprimer le dernier ticket** génère un ticket 80 mm imprimable
 (dossier `documents/`).
@@ -87,8 +100,17 @@ déjà enregistré. **Relevé de compte** affiche ventes, paiements et retours.
 
 ## 7. Retours et annulations
 
-Les retours se font depuis la vente concernée (module ventes) : les quantités
-retournées ne peuvent pas dépasser les quantités vendues. La marchandise
+Bouton **Historique / retours** de l'écran de vente : la liste des ventes permet
+de choisir **Retour de marchandise** ou **Annuler la vente**.
+
+- Retour : sélectionnez la vente, saisissez les quantités à retourner ligne par
+  ligne (les quantités déjà retournées sont affichées et le maximum est borné),
+  cochez « revendable » si la marchandise réintègre le stock, indiquez le motif
+  et le mode de remboursement (espèces, avoir, autre). Les quantités retournées
+  ne peuvent pas dépasser les quantités vendues.
+- Annulation : motif obligatoire. Le stock est réintégré, la créance soldée et
+  l'opération inscrite au journal d'audit ; le document reste consultable et
+  n'est jamais supprimé. La marchandise
 revendable réintègre le stock ; la marchandise cassée n'y entre pas. Le
 remboursement espèces ne dépasse jamais ce qui a été réellement encaissé.
 

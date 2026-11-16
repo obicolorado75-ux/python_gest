@@ -50,12 +50,17 @@ Base : **SQLite** locale, fichier unique dans le répertoire de données utilisa
 ### Ventes et clients
 `customers`, `customer_orders`, `customer_order_lines`, `sales`, `sale_lines`,
 `sale_returns`, `sale_return_lines`, `customer_payments`, `payment_allocations`,
-`customer_credit_events`.
+`customer_credit_events`, `sale_payments`, `held_sales`.
 
 - `sale_lines` fige désignation, unité, prix, remise et **coût CMP** au moment de
   la vente : les marges historiques ne sont jamais recalculées.
 - `sales.deposit_amount` isole les consignes du chiffre d'affaires.
 - `customer_payments.customer_id` est nullable (encaissement au comptoir).
+- `sale_payments` porte le détail d'un encaissement mixte : une ligne par moyen
+  de paiement, chacune reliée à son `customer_payments` (un numéro `PAY-…` par
+  encaissement, donc un mouvement de caisse par moyen).
+- `held_sales` conserve le panier d'une vente suspendue en JSON, sans vente, sans
+  mouvement de stock ni de caisse : rien n'existe comptablement avant validation.
 
 ### Achats et fournisseurs
 `suppliers`, `purchase_orders`, `purchase_order_lines`, `goods_receipts`,
@@ -93,6 +98,8 @@ alembic -x url=sqlite:///./dev.db check           # vérifie l'absence de diverg
 ```
 
 - La révision initiale `ff962e37ee63` crée l'ensemble du schéma.
+- `92b311107557` ajoute `sale_payments` et `held_sales` (paiements mixtes et
+  ventes suspendues).
 - `render_as_batch=True` : les modifications de colonnes sont possibles sur SQLite.
 - Au démarrage, l'application vérifie/crée le schéma ; en production, appliquez
   `alembic upgrade head` avant de lancer une nouvelle version.

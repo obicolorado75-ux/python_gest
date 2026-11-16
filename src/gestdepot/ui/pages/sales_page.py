@@ -23,6 +23,14 @@ from PySide6.QtWidgets import (
 
 from ...domain.rules import label_status
 from ...services.sales_service import PAYMENT_LABELS, PAYMENT_METHODS, SalesError
+from ..dialogs.sale_dialogs import (
+    CancelSaleDialog,
+    HeldSalesDialog,
+    HoldDialog,
+    ReturnDialog,
+    SaleHistoryDialog,
+    SplitPaymentDialog,
+)
 from ..widgets import DataTable, Page, confirm, info, money
 
 LINE_HEADERS = ["Désignation", "Conditionnement", "Qté", "Prix unitaire", "Total"]
@@ -38,6 +46,8 @@ class SalesPage(Page):
         self.lines: list[dict] = []
         self.price_list_id: int | None = None
         self.customers: list = []
+        self._split_payments: list[dict] = []
+        self._held_id: int | None = None
 
         splitter = QSplitter(Qt.Horizontal)
         self.body.addWidget(splitter, 1)
@@ -85,10 +95,21 @@ class SalesPage(Page):
         layout.addWidget(self.cart, 3)
 
         cart_actions = QHBoxLayout()
+        cart_actions.addWidget(QPushButton("Modifier la quantité",
+                                          clicked=self.edit_line_quantity))
         cart_actions.addWidget(QPushButton("Retirer la ligne", clicked=self.remove_line))
         cart_actions.addWidget(QPushButton("Vider le panier", clicked=self.clear_cart))
         cart_actions.addStretch(1)
         layout.addLayout(cart_actions)
+
+        hold_row = QHBoxLayout()
+        hold_row.addWidget(QPushButton("Suspendre (F8)", clicked=self.hold_current_sale))
+        hold_row.addWidget(QPushButton("Ventes suspendues",
+                                       clicked=self.open_held_sales))
+        hold_row.addWidget(QPushButton("Historique / retours",
+                                       clicked=self.open_history))
+        hold_row.addStretch(1)
+        layout.addLayout(hold_row)
         return panel
 
     # --- panneau droit : client, totaux, paiement ---------------------------
@@ -155,9 +176,14 @@ class SalesPage(Page):
         paid_row.addWidget(self.paid_spin, 1)
         layout.addLayout(paid_row)
 
+        pay_row = QHBoxLayout()
         self.pay_full = QPushButton("Tout encaisser")
         self.pay_full.clicked.connect(self._pay_full)
-        layout.addWidget(self.pay_full)
+        pay_row.addWidget(self.pay_full)
+        self.split_button = QPushButton("Paiement mixte…")
+        self.split_button.clicked.connect(self.open_split_payment)
+        pay_row.addWidget(self.split_button)
+        layout.addLayout(pay_row)
 
         self.change_label = QLabel("")
         self.change_label.setStyleSheet("color: #1B7F3B; font-weight: 600;")
@@ -198,6 +224,7 @@ class SalesPage(Page):
             "F2": lambda: self.search.setFocus(),
             "F4": lambda: self.customer_box.setFocus(),
             "F6": lambda: self.method_box.setFocus(),
+            "F8": self.hold_current_sale,
             "F9": self.confirm_sale,
             "Escape": self.reset,
         }
@@ -333,6 +360,38 @@ class SalesPage(Page):
         del self.lines[row]
         self._render_cart()
 
+    def edit_line_quantity(self) -> None:
+        """Modifie la quantité d'une ligne du panier sans la ressaisir (§5.5)."""
+        row = self.cart.selected_row()
+        if row is None or row >= len(self.lines):
+            QMessageBox.information(self, "Panier", "Sélectionnez une ligne.")
+            return
+        line = dict(self.lines[row])
+        from PySide6.QtWidgets import QInputDialog
+        qty, ok = QInputDialog.getInt(
+            self, "Modifier la quantité",
+            f"Nouvelle quantité ({line.get('quantity_display') or 1}) :",
+            int(line.get("quantity_display") or 1), 0, 99_999, 1)
+        if not ok:
+            return
+        if qty == 0:
+            del self.lines[row]
+            self._render_cart()
+            return
+        line["quantity_display"] = qty
+        candidate = list(self.lines)
+        candidate[row] = line
+        try:
+            prepared = self.services["sales"].draft_lines(
+                candidate, self.price_list_id, self.discount_spin.value())
+        except SalesError as exc:
+            QMessageBox.warning(self, "Quantité refusée", str(exc))
+            return
+        self.lines = [{key: item[key] for key in
+                       ("product_id", "packaging_id", "quantity_display", "base_qty")}
+                      for item in prepared["lines"]]
+        self._render_cart()
+
     def clear_cart(self) -> None:
         if self.lines and not confirm(self, "Vider le panier ?"):
             return
@@ -404,6 +463,53 @@ class SalesPage(Page):
 
     def _pay_full(self) -> None:
         self.paid_spin.setValue(getattr(self, "_total", 0))
+        self._split_payments = []
+
+    def open_split_payment(self) -> None:
+        """Saisie d'un règlement en plusieurs moyens de paiement (§5.5)."""
+        total = getattr(self, "_total", 0)
+        if not self.lines:
+            QMessageBox.information(self, "Paiement mixte",
+                                    "Le panier est vide.")
+            return
+        dialog = SplitPaymentDialog(total, self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+        payments = dialog.payments()
+        self._split_payments = payments
+        collected = sum(entry["amount"] for entry in payments)
+        self.paid_spin.blockSignals(True)
+        self.paid_spin.setValue(min(collected, total))
+        self.paid_spin.blockSignals(False)
+        self.method_box.blockSignals(True)
+        index = self.method_box.findData(payments[0]["method"])
+        if index >= 0:
+            self.method_box.setCurrentIndex(index)
+        self.method_box.blockSignals(False)
+        detail = " + ".join(f"{PAYMENT_LABELS.get(entry['method'], entry['method'])} "
+                            f"{money(entry['amount'])}" for entry in payments)
+        self.lbl_detail.setText(f"Encaissements : {detail}")
+        self._update_change()
+
+    def _effective_payments(self) -> list[dict]:
+        """Encaissements à transmettre au service (mixte ou règlement unique)."""
+        total = getattr(self, "_total", 0)
+        if self._split_payments:
+            payments = [dict(entry) for entry in self._split_payments]
+            self._split_payments = payments
+            # le rendu de monnaie n'est jamais encaissé : on plafonne au dû
+            over = sum(entry["amount"] for entry in payments) - total
+            for entry in reversed(payments):
+                if over <= 0:
+                    break
+                reduction = min(entry["amount"], over)
+                entry["amount"] -= reduction
+                over -= reduction
+            return [entry for entry in payments if entry["amount"] > 0]
+        paid = min(self.paid_spin.value(), total)
+        if paid <= 0:
+            return []
+        return [{"method": self.method_box.currentData(), "amount": paid}]
 
     # --- validation ------------------------------------------------------------
     def confirm_sale(self) -> None:
@@ -417,6 +523,8 @@ class SalesPage(Page):
             paid = total
         if not confirm(self, f"Valider la vente de {money(total)} ?"):
             return
+        payments = self._effective_payments()
+        paid = sum(entry["amount"] for entry in payments)
         try:
             sale = self.services["sales"].confirm_sale(
                 items=self.lines,
@@ -427,7 +535,8 @@ class SalesPage(Page):
                 manual_discount=self.discount_spin.value(),
                 deposit_packaging_id=self.deposit_box.currentData(),
                 deposit_qty=self.deposit_qty.value(),
-                note=self.note_edit.text().strip() or None)
+                note=self.note_edit.text().strip() or None,
+                payments=payments)
         except (SalesError, PermissionError) as exc:
             QMessageBox.warning(self, "Vente refusée", str(exc))
             return
@@ -439,6 +548,119 @@ class SalesPage(Page):
                    f"Créance : {money(sale.total_amount - sale.paid_amount)}",
              "Vente enregistrée")
         self.reset()
+        self.refresh()
+
+    # --- suspension / reprise (F8) -------------------------------------------
+    def _sale_label(self) -> str:
+        customer_id = self.customer_box.currentData()
+        customer = next((c for c in self.customers if c.id == customer_id), None)
+        return customer.name if customer else "Comptoir"
+
+    def _sale_state(self) -> dict:
+        return {"items": [dict(item) for item in self.lines],
+                "customer_id": self.customer_box.currentData(),
+                "price_list_id": self.price_list_id,
+                "discount": self.discount_spin.value(),
+                "deposit_packaging_id": self.deposit_box.currentData(),
+                "deposit_qty": self.deposit_qty.value(),
+                "label": self._sale_label(),
+                "note": self.note_edit.text().strip() or None}
+
+    def hold_current_sale(self) -> None:
+        """Suspend la vente en cours sans écriture de stock ni de caisse (F8)."""
+        if not self.lines:
+            QMessageBox.information(self, "Suspension",
+                                    "Le panier est vide.")
+            return
+        dialog = HoldDialog(self._sale_label(), self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+        state = self._sale_state()
+        try:
+            held = self.services["sales"].hold_sale(
+                items=state["items"], customer_id=state["customer_id"],
+                price_list_id=state["price_list_id"],
+                manual_discount=state["discount"],
+                deposit_packaging_id=state["deposit_packaging_id"],
+                deposit_qty=state["deposit_qty"],
+                label=dialog.label.text().strip() or state["label"],
+                note=dialog.note.text().strip() or None)
+        except (SalesError, PermissionError) as exc:
+            QMessageBox.warning(self, "Suspension impossible", str(exc))
+            return
+        self._held_id = held.id
+        info(self, f"Panier « {held.label} » suspendu.\n"
+                   "Il reste disponible dans « Ventes suspendues ».",
+             "Vente suspendue")
+        self.reset()
+
+    def open_held_sales(self) -> None:
+        dialog = HeldSalesDialog(self.services, self)
+        if dialog.exec() != dialog.DialogCode.Accepted or dialog.selected_id is None:
+            return
+        self.resume_held(dialog.selected_id)
+
+    def resume_held(self, held_id: int) -> None:
+        """Recharge un panier suspendu dans l'écran de vente (aucune validation)."""
+        try:
+            data = self.services["sales"].get_held_sale(held_id)
+        except (SalesError, PermissionError) as exc:
+            QMessageBox.warning(self, "Reprise impossible", str(exc))
+            return
+        self.lines = [{key: item[key] for key in
+                       ("product_id", "packaging_id", "quantity_display", "base_qty")}
+                      for item in data["items"]]
+        self._held_id = held_id
+        self.customer_box.blockSignals(True)
+        index = self.customer_box.findData(data["customer_id"])
+        self.customer_box.setCurrentIndex(index if index >= 0 else 0)
+        self.customer_box.blockSignals(False)
+        if data["price_list_id"]:
+            self.price_list_box.blockSignals(True)
+            index = self.price_list_box.findData(data["price_list_id"])
+            if index >= 0:
+                self.price_list_box.setCurrentIndex(index)
+            self.price_list_box.blockSignals(False)
+            self.price_list_id = self.price_list_box.currentData()
+        self.discount_spin.setValue(int(data["discount"] or 0))
+        self._split_payments = []
+        self._render_cart()
+        info(self, f"Panier « {data['label']} » repris.\n"
+                   "Vérifiez les quantités puis validez la vente (F9).",
+             "Vente reprise")
+
+    # --- historique, retours et annulations ----------------------------------
+    def open_history(self) -> None:
+        dialog = SaleHistoryDialog(self.services, self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+        sale = dialog.chosen_sale
+        if sale is None:
+            return
+        if dialog.chosen_action == "return":
+            self._open_return(sale)
+        elif dialog.chosen_action == "cancel":
+            self._open_cancel(sale)
+
+    def _open_return(self, sale) -> None:
+        dialog = ReturnDialog(self.services, sale, self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+        number = getattr(dialog, "return_number", "")
+        info(self, f"Retour {number} enregistré sur la vente {sale.number}.",
+             "Retour de marchandise")
+        self.refresh()
+
+    def _open_cancel(self, sale) -> None:
+        dialog = CancelSaleDialog(sale, self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+        try:
+            self.services["sales"].cancel_sale(sale.id, dialog.motif())
+        except (SalesError, PermissionError) as exc:
+            QMessageBox.warning(self, "Annulation refusée", str(exc))
+            return
+        info(self, f"Vente {sale.number} annulée.", "Annulation")
         self.refresh()
 
     def print_last_receipt(self) -> None:
@@ -467,6 +689,8 @@ class SalesPage(Page):
         self._prepared = []
         self.cart.setRowCount(0)
         self.discount_spin.setValue(0)
+        self._split_payments = []
+        self._held_id = None
         self.paid_spin.setValue(0)
         self.note_edit.clear()
         self.deposit_qty.setValue(0)

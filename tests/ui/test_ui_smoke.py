@@ -111,3 +111,108 @@ class TestFenetrePrincipale:
         page.qty_spin.setValue(9999)
         page.add_selected_product()
         assert page.lines == []  # ajout refusé, message affiché
+
+
+class TestCaisseEtendue:
+    """§5.5 : paiement mixte, suspension (F8), quantités, retours."""
+
+    def test_paiement_mixte_alimente_les_encaissements(self, window,
+                                                       stocked_product):
+        window._select("sales")
+        page = window.pages["sales"]
+        page.product_list.setCurrentRow(0)
+        page.packaging_box.setCurrentIndex(0)
+        page.qty_spin.setValue(10)          # 10 × 150 = 1 500
+        page.add_selected_product()
+        page._split_payments = [{"method": "especes", "amount": 1_000},
+                                {"method": "wave", "amount": 400}]
+        page.paid_spin.setValue(1_400)
+        payments = page._effective_payments()
+        assert sum(entry["amount"] for entry in payments) == 1_400
+        assert {entry["method"] for entry in payments} == {"especes", "wave"}
+
+    def test_paiement_mixte_plafonne_au_total(self, window, stocked_product):
+        window._select("sales")
+        page = window.pages["sales"]
+        page.product_list.setCurrentRow(0)
+        page.packaging_box.setCurrentIndex(0)
+        page.qty_spin.setValue(2)           # 300
+        page.add_selected_product()
+        page._split_payments = [{"method": "especes", "amount": 500},
+                                {"method": "wave", "amount": 500}]
+        payments = page._effective_payments()
+        assert sum(entry["amount"] for entry in payments) == 300
+
+    def test_dialogue_paiement_mixte_repartition(self, qapp):
+        from gestdepot.ui.dialogs.sale_dialogs import SplitPaymentDialog
+        dialog = SplitPaymentDialog(10_000)
+        dialog._split_two()
+        assert sum(entry["amount"] for entry in dialog.payments()) == 10_000
+        assert len({entry["method"] for entry in dialog.payments()}) == 2
+        dialog._all_cash()
+        assert dialog.payments() == [{"method": "especes", "amount": 10_000}]
+
+    def test_suspendre_puis_reprendre(self, window, sales, stocked_product):
+        window._select("sales")
+        page = window.pages["sales"]
+        page.product_list.setCurrentRow(0)
+        page.packaging_box.setCurrentIndex(0)
+        page.qty_spin.setValue(3)
+        page.add_selected_product()
+        state = page._sale_state()
+        held = sales.hold_sale(
+            items=state["items"], price_list_id=state["price_list_id"],
+            label="Table 3")
+        page.reset()
+        assert page.lines == []
+        page.resume_held(held.id)
+        assert len(page.lines) == 1
+        assert len(sales.held_sales()) == 1
+
+    def test_modifier_quantite_ligne(self, window, stocked_product, monkeypatch):
+        from PySide6.QtWidgets import QInputDialog
+        window._select("sales")
+        page = window.pages["sales"]
+        page.product_list.setCurrentRow(0)
+        page.packaging_box.setCurrentIndex(0)
+        page.qty_spin.setValue(2)
+        page.add_selected_product()
+        page.cart.selectRow(0)
+        monkeypatch.setattr(QInputDialog, "getInt",
+                            staticmethod(lambda *a, **k: (5, True)))
+        page.edit_line_quantity()
+        assert page.lines[0]["quantity_display"] == 5
+
+    def test_modifier_quantite_zero_retire_la_ligne(self, window, stocked_product,
+                                                    monkeypatch):
+        from PySide6.QtWidgets import QInputDialog
+        window._select("sales")
+        page = window.pages["sales"]
+        page.product_list.setCurrentRow(0)
+        page.packaging_box.setCurrentIndex(0)
+        page.qty_spin.setValue(2)
+        page.add_selected_product()
+        page.cart.selectRow(0)
+        monkeypatch.setattr(QInputDialog, "getInt",
+                            staticmethod(lambda *a, **k: (0, True)))
+        page.edit_line_quantity()
+        assert page.lines == []
+
+    def test_retour_depuis_la_caisse(self, window, stocked_product,
+                                     catalog, monkeypatch):
+        from gestdepot.ui.dialogs.sale_dialogs import ReturnDialog
+        services = window.services
+        sales = services["sales"]
+        product, _ = stocked_product
+        sale = sales.confirm_sale(
+            items=[{"product_id": product.id, "packaging_id": None,
+                    "quantity_display": 4}],
+            payment_method="especes", paid_amount=600,
+            price_list_id=catalog.list_price_lists()[0].id)
+        dialog = ReturnDialog(services, sales.get_sale(sale.id))
+        monkeypatch.setattr(dialog, "exec", lambda: dialog.DialogCode.Accepted)
+        dialog.spins[0].setValue(2)
+        dialog.reason.setText("Bouteilles cassées")
+        dialog._save()
+        assert dialog.return_number.startswith("RET-")
+        assert sales.returnable_lines(sale.id)[0]["remaining"] == 2

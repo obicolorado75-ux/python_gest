@@ -7,11 +7,29 @@
 | 0 — Cadrage et prototype | ✅ fait | dépôt, base locale, fenêtre principale, lancement hors ligne, tests |
 | 1 — Fondations et catalogue | ✅ fait (P0) | architecture en couches, migrations, connexion, utilisateurs/rôles, paramètres, catégories, marques, unités, conditionnements, produits, tarifs, import contrôlé |
 | 2 — Stocks, achats | 🟡 P0 livré | journal immuable, soldes, CMP, fournisseurs, commandes, réceptions, inventaires ; consignes : service + écran partiel |
-| 3 — Caisse et ventes | 🟡 P0 livré | POS, panier, tarifs, remises, paiements, crédit, retours, ticket ; ventes suspendues non livrées |
+| 3 — Caisse et ventes | ✅ P0 livré | POS, panier, tarifs, remises, paiements mixtes, crédit, retours, annulations, ventes suspendues (F8), ticket |
 | 4 — Clients, livraisons, finances | 🟡 partiel | clients, crédits, relevés, paiements affectés, sessions de caisse, dépenses ; livraisons et commandes clients à faire (P1) |
 | 5 — Inventaires, analyses, rapports | 🟡 P0 livré | inventaires guidés, tableau de bord, marges, exports Excel/PDF ; rapports spécialisés à compléter |
 | 6 — Sécurité, sauvegarde | 🟡 partiel | audit, permissions, sauvegarde/restauration vérifiées ; permissions fines par action et tests de régression à étendre |
 | 7 — Packaging | ⬜ à faire | scripts de construction fournis, installateurs à produire sur Windows/macOS |
+
+## v0.1.1 — caisse complète (16 novembre 2026)
+
+### Ajouté
+
+- **Paiement mixte** : une vente peut être réglée par plusieurs moyens
+  (espèces, Mobile Money, virement…). Chaque encaissement reçoit son numéro
+  `PAY-…`, son mouvement de caisse et une ligne dans `sale_payments` ; le total
+  des encaissements est contrôlé côté service et plafonné au dû côté écran
+  (table `sale_payments`, migration `92b311107557`).
+- **Ventes suspendues (F8)** : suspendre conserve le panier en JSON sans aucune
+  écriture de stock, de caisse ou de créance ; dialogue **Ventes suspendues**
+  pour reprendre (le panier revient en caisse) ou abandonner (abandon tracé dans
+  l'audit). Table `held_sales`.
+- **Modifier la quantité** d'une ligne du panier, ou la retirer, sans ressaisie.
+- **Retours et annulations depuis l'écran de vente** : bouton *Historique /
+  retours*, quantités retournables bornées (`SalesService.returnable_lines`),
+  motifs obligatoires, traçabilité conservée.
 
 ## v0.1.0 — socle P0 (16 novembre 2026)
 
@@ -36,8 +54,8 @@
 - **Rapports** : tableau de bord, marges, exports Excel et PDF.
 - **Sauvegarde** : copie cohérente via l'API SQLite, contrôle d'intégrité,
   empreinte SHA-256, restauration protégée par authentification et vérification.
-- **Tests** : 75 tests (scénarios T01–T18, atomicité, schéma, exports, tickets,
-  interface).
+- **Tests** : 93 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
+  retours, atomicité, schéma, exports, tickets, interface).
 
 ### Corrigé pendant cette étape
 
@@ -55,6 +73,5 @@
 
 - Un seul poste, pas de partage réseau (§2.3).
 - Livraisons, commandes clients et bons de livraison : à implémenter (P1).
-- Ventes suspendues/reprises, paiements mixtes multi-lignes : à compléter.
 - Chiffrement applicatif de la base non activé (§8.4).
 - Installateurs Windows/macOS à construire sur leurs plateformes respectives.

@@ -5,6 +5,7 @@ de caisse/paiement + solde client + consignes dans une SEULE transaction.
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime
 
 from sqlalchemy import func, select
@@ -16,12 +17,14 @@ from ..database.models import (
     CustomerCreditEvent,
     CustomerPayment,
     DepositMovement,
+    HeldSale,
     PaymentAllocation,
     Product,
     ProductPackaging,
     ReturnablePackaging,
     Sale,
     SaleLine,
+    SalePayment,
     SaleReturn,
     SaleReturnLine,
 )
@@ -143,21 +146,75 @@ class SalesService:
                 "total": gross - manual_discount, "discount": manual_discount}
 
     # --- validation atomique ---------------------------------------------
-    def confirm_sale(self, items: list[dict], payment_method: str,
-                     paid_amount: int, customer_id: int | None = None,
+    def normalize_payments(self, payments: list[dict] | None,
+                           payment_method: str, paid_amount: int) -> list[dict]:
+        """Valide et normalise les encaissements d'une vente (§5.5).
+
+        Accepte un règlement unique (arguments historiques) ou plusieurs
+        encaissements (paiement mixte). Retourne une liste de
+        ``{"method": str, "amount": int}`` dont la somme vaut ``paid_amount``.
+        """
+        if not payments:
+            if paid_amount < 0:
+                raise SalesError("Montant encaissé invalide.")
+            if payment_method not in PAYMENT_METHODS:
+                raise SalesError("Moyen de paiement inconnu.")
+            return [{"method": payment_method, "amount": int(paid_amount)}] \
+                if paid_amount else []
+        cleaned: list[dict] = []
+        for entry in payments:
+            method = entry.get("method") or entry.get("payment_method")
+            amount = int(entry.get("amount") or 0)
+            if method not in PAYMENT_METHODS:
+                raise SalesError(f"Moyen de paiement inconnu : {method}")
+            if amount < 0:
+                raise SalesError("Un montant encaissé ne peut pas être négatif.")
+            if amount == 0:
+                continue
+            for existing in cleaned:
+                if existing["method"] == method:
+                    existing["amount"] += amount
+                    break
+            else:
+                cleaned.append({"method": method, "amount": amount})
+        total = sum(entry["amount"] for entry in cleaned)
+        if total != paid_amount:
+            raise SalesError(
+                "Le total des encaissements ne correspond pas au montant reçu "
+                f"({total} ≠ {paid_amount}).")
+        return cleaned
+
+    def confirm_sale(self, items: list[dict], payment_method: str | None = None,
+                     paid_amount: int = 0, customer_id: int | None = None,
                      price_list_id: int | None = None, manual_discount: int = 0,
                      deposit_packaging_id: int | None = None,
                      deposit_qty: int = 0,
                      allow_credit_excess: bool = False,
-                     note: str | None = None) -> Sale:
-        """Vente complète en une transaction (T03–T06, §7.2)."""
+                     note: str | None = None,
+                     payments: list[dict] | None = None) -> Sale:
+        """Vente complète en une transaction (T03–T06, §7.2).
+
+        ``payments`` permet un paiement mixte : [{"method": "especes",
+        "amount": 10000}, {"method": "wave", "amount": 5000}]. Les arguments
+        ``payment_method``/``paid_amount`` restent valables pour un règlement
+        unique (rétro-compatibilité des appels et des tests).
+        """
         common.require("sales.create")
-        if payment_method not in PAYMENT_METHODS:
-            raise SalesError("Moyen de paiement inconnu.")
         if paid_amount < 0:
             raise SalesError("Montant encaissé invalide.")
         if manual_discount and not common.has_permission("sales.discount"):
             raise SalesError("Remise non autorisée pour cet utilisateur.")
+        if payments and not paid_amount:
+            # le détail des encaissements fait foi quand il est fourni
+            paid_amount = sum(int(entry.get("amount") or 0) for entry in payments)
+        settled = self.normalize_payments(payments, payment_method or "especes",
+                                          paid_amount)
+        paid_amount = sum(entry["amount"] for entry in settled)
+        # moyen principal = celui qui porte le plus gros montant (affichage ticket)
+        main_method = (max(settled, key=lambda entry: entry["amount"])["method"]
+                       if settled else (payment_method or None))
+        if main_method is not None and main_method not in PAYMENT_METHODS:
+            raise SalesError("Moyen de paiement inconnu.")
 
         prep = self.draft_lines(items, price_list_id, manual_discount)
         total_goods = prep["total"]
@@ -203,7 +260,7 @@ class SalesService:
             sale = Sale(number=number, customer_id=customer_id, status="confirmed",
                         total_amount=total, discount_amount=manual_discount,
                         deposit_amount=deposit_amount, paid_amount=paid_amount,
-                        payment_method=payment_method,
+                        payment_method=main_method or "especes",
                         cash_session_id=cash_session.id if cash_session else None,
                         user_id=user_id, note=note)
             s.add(sale)
@@ -238,23 +295,30 @@ class SalesService:
                                       deposit_value=rp.deposit_value,
                                       user_id=user_id))
                 self._cash_movement(s, cash_session, "in", deposit_amount,
-                                    payment_method, "consigne", "sale", sale.id)
+                                    main_method or "especes", "consigne",
+                                    "sale", sale.id)
 
-            # paiement + caisse (§5.12)
-            if paid_amount > 0:
+            # paiement + caisse (§5.12) — un règlement par moyen (paiement mixte)
+            goods_left = total_goods
+            for entry in settled:
+                method, amount = entry["method"], entry["amount"]
                 cp = CustomerPayment(number=next_document_number(s, "PAY"),
-                                     customer_id=customer_id, amount=paid_amount,
-                                     payment_method=payment_method, sale_id=sale.id,
+                                     customer_id=customer_id, amount=amount,
+                                     payment_method=method, sale_id=sale.id,
                                      cash_session_id=cash_session.id
                                      if cash_session else None,
                                      user_id=user_id)
                 s.add(cp)
                 s.flush()
-                s.add(PaymentAllocation(payment_id=cp.id, sale_id=sale.id,
-                                        amount=min(paid_amount, total_goods)))
-                self._cash_movement(s, cash_session, "in", paid_amount,
-                                    payment_method, "encaissement_vente",
-                                    "sale", sale.id)
+                s.add(SalePayment(sale_id=sale.id, payment_method=method,
+                                  amount=amount, payment_id=cp.id))
+                allocated = min(amount, goods_left)
+                if allocated > 0:
+                    s.add(PaymentAllocation(payment_id=cp.id, sale_id=sale.id,
+                                            amount=allocated))
+                    goods_left -= allocated
+                self._cash_movement(s, cash_session, "in", amount, method,
+                                    "encaissement_vente", "sale", sale.id)
 
             # créance (§5.9)
             if credit > 0:
@@ -500,6 +564,132 @@ class SalesService:
                                               document_type="sale", document_id=sale.id))
             auth.log("sale_cancel", "Sale", sale_id, new_value=sale.number,
                      comment=reason, session=s)
+
+    # --- retours : état des lignes ------------------------------------------
+    def returnable_lines(self, sale_id: int) -> list[dict]:
+        """Lignes d'une vente avec la quantité encore retournable (§7.3)."""
+        with session_scope() as s:
+            sale = s.get(Sale, sale_id)
+            if sale is None:
+                raise SalesError("Vente introuvable.")
+            returned: dict[int, int] = {}
+            for line_id, qty in s.execute(
+                    select(SaleReturnLine.sale_line_id,
+                           func.sum(SaleReturnLine.quantity))
+                    .join(SaleReturn, SaleReturn.id == SaleReturnLine.return_id)
+                    .where(SaleReturn.sale_id == sale_id)
+                    .group_by(SaleReturnLine.sale_line_id)).all():
+                returned[line_id] = int(qty or 0)
+            rows = []
+            for line in sale.lines:
+                already = returned.get(line.id, 0)
+                remaining = int(line.quantity) - already
+                if remaining <= 0:
+                    continue
+                rows.append({
+                    "sale_line_id": line.id,
+                    "designation": line.designation,
+                    "unit_label": line.unit_label,
+                    "sold": int(line.quantity),
+                    "already_returned": already,
+                    "remaining": remaining,
+                    "total": int(line.total),
+                    "unit_refund": round(line.total / line.quantity)
+                    if line.quantity else 0,
+                })
+            return rows
+
+    # --- ventes suspendues (F8, §5.5) ---------------------------------------
+    def hold_sale(self, items: list[dict], customer_id: int | None = None,
+                  price_list_id: int | None = None, manual_discount: int = 0,
+                  deposit_packaging_id: int | None = None,
+                  deposit_qty: int = 0, label: str | None = None,
+                  note: str | None = None) -> HeldSale:
+        """Met le panier de côté sans écriture comptable (F8).
+
+        Aucun stock, aucune caisse, aucun numéro de document n'est consommé :
+        la vente n'est validée qu'à la reprise.
+        """
+        common.require("sales.create")
+        if not items:
+            raise SalesError("Le panier est vide.")
+        user_id = common.current_user_id()
+        with session_scope() as s:
+            customer = s.get(Customer, customer_id) if customer_id else None
+            if customer_id and customer is None:
+                raise SalesError("Client introuvable.")
+            held = HeldSale(
+                label=(label or "").strip() or (customer.name if customer
+                                                else "Comptoir"),
+                customer_id=customer_id, price_list_id=price_list_id,
+                deposit_packaging_id=deposit_packaging_id,
+                deposit_qty=deposit_qty or 0, discount=manual_discount or 0,
+                items_json=json.dumps(items, ensure_ascii=False),
+                note=note, user_id=user_id)
+            s.add(held)
+            s.flush()
+            auth.log("sale_hold", "HeldSale", held.id, new_value=held.label,
+                     session=s)
+            return held
+
+    def held_sales(self):
+        with session_scope() as s:
+            return list(s.scalars(select(HeldSale).order_by(HeldSale.at.desc(),
+                                                            HeldSale.id.desc())))
+
+    def get_held_sale(self, held_id: int) -> dict:
+        """Panier suspendu restitué sous forme exploitable par l'écran de vente."""
+        with session_scope() as s:
+            held = s.get(HeldSale, held_id)
+            if held is None:
+                raise SalesError("Vente suspendue introuvable.")
+            return {"items": json.loads(held.items_json),
+                    "customer_id": held.customer_id,
+                    "price_list_id": held.price_list_id,
+                    "discount": held.discount,
+                    "deposit_packaging_id": held.deposit_packaging_id,
+                    "deposit_qty": held.deposit_qty,
+                    "label": held.label, "note": held.note}
+
+    def discard_held_sale(self, held_id: int) -> None:
+        """Abandon d'une vente suspendue : tracé, jamais de suppression muette (§4.6)."""
+        common.require("sales.create")
+        with session_scope() as s:
+            held = s.get(HeldSale, held_id)
+            if held is None:
+                raise SalesError("Vente suspendue introuvable.")
+            auth.log("sale_hold_discard", "HeldSale", held.id,
+                     old_value=held.label, session=s)
+            s.delete(held)
+
+    def resume_held_sale(self, held_id: int, *,
+                         payment_method: str | None = None, paid_amount: int = 0,
+                         customer_id: int | None = None, price_list_id: int | None = None,
+                         manual_discount: int | None = None,
+                         deposit_packaging_id: int | None = None,
+                         deposit_qty: int | None = None,
+                         allow_credit_excess: bool = False,
+                         note: str | None = None,
+                         payments: list[dict] | None = None) -> Sale:
+        """Reprend une vente suspendue et la valide puis la retire de la liste."""
+        common.require("sales.create")
+        data = self.get_held_sale(held_id)
+        sale = self.confirm_sale(
+            items=data["items"],
+            payment_method=payment_method, paid_amount=paid_amount,
+            customer_id=customer_id if customer_id is not None else data["customer_id"],
+            price_list_id=(price_list_id if price_list_id is not None
+                           else data["price_list_id"]),
+            manual_discount=(data["discount"] if manual_discount is None
+                             else manual_discount),
+            deposit_packaging_id=(deposit_packaging_id
+                                  if deposit_packaging_id is not None
+                                  else data["deposit_packaging_id"]),
+            deposit_qty=(data["deposit_qty"] if deposit_qty is None else deposit_qty),
+            allow_credit_excess=allow_credit_excess,
+            note=note or data["note"], payments=payments)
+        self.discard_held_sale(held_id)
+        return sale
 
     # --- consultations ------------------------------------------------------
     def sales_of_period(self, start: datetime, end: datetime):

@@ -106,6 +106,48 @@ class CustomerPayment(Base):
     comment: Mapped[str | None] = mapped_column(Text)
 
 
+class SalePayment(Base):
+    """Détail des encaissements d'une vente (§5.5 : paiement mixte).
+
+    Une vente peut être réglée par plusieurs moyens (ex. 10 000 en espèces +
+    5 000 par Wave). ``sales.payment_method`` reste renseigné avec le moyen
+    principal pour l'affichage rapide ; le détail vit ici et chaque ligne
+    alimente la caisse avec son propre moyen de paiement (§5.12).
+    """
+    __tablename__ = "sale_payments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sale_id: Mapped[int] = mapped_column(ForeignKey("sales.id"), index=True)
+    payment_method: Mapped[str] = mapped_column(String(40))
+    amount: Mapped[int] = mapped_column(Integer)
+    payment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer_payments.id"), index=True)
+    at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+class HeldSale(Base):
+    """Vente suspendue au comptoir (§5.5 : « suspendre / reprendre une vente »).
+
+    Le panier est conservé en JSON, sans aucune écriture de stock, de caisse ni
+    de créance : une vente suspendue n'existe pas encore comptablement. Elle
+    n'est pas un document numéroté (VTE-…) tant qu'elle n'est pas validée.
+    """
+    __tablename__ = "held_sales"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    label: Mapped[str] = mapped_column(String(80))
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"))
+    price_list_id: Mapped[int | None] = mapped_column(ForeignKey("price_lists.id"))
+    deposit_packaging_id: Mapped[int | None] = mapped_column(
+        ForeignKey("returnable_packaging.id"))
+    deposit_qty: Mapped[int] = mapped_column(Integer, default=0)
+    discount: Mapped[int] = mapped_column(Integer, default=0)
+    items_json: Mapped[str] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), index=True)
+
+    customer: Mapped["Customer | None"] = relationship(lazy="joined")
+
+
 class PaymentAllocation(Base):
     """Affectation d'un paiement à une ou plusieurs ventes (§5.9)."""
     __tablename__ = "payment_allocations"

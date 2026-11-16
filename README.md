@@ -19,7 +19,7 @@ consulter ou imprimer.
 | Catalogue | Produits, catégories, marques, unités, **conditionnements configurables** (ex. 1 casier = 24), listes de tarifs, historique des coûts, import contrôlé |
 | Stock | Journal immuable des mouvements, soldes et CMP mobile, alertes de seuil, rapprochement journal/soldes, inventaires avec régularisation tracée |
 | Achats | Fournisseurs, commandes d'achat, réceptions partielles ou totales, facture et solde fournisseur, suggestions de réappro |
-| Ventes | Écran de saisie rapide, panier multi-conditionnements, remises, ventes à crédit avec plafond, paiements mixtes, retours et annulations tracés |
+| Ventes | Écran de saisie rapide, panier multi-conditionnements, remises, ventes à crédit avec plafond, paiements mixtes, ventes suspendues/reprises (F8), retours et annulations tracés |
 | Clients | Fiche, plafond de crédit, relevé de compte, règlements partiels (le CA n'est pas recalculé) |
 | Caisse | Ouverture, mouvements, dépenses, clôture avec écart conservé ; espèces séparées du Mobile Money |
 | Rapports | Tableau de bord, marges, exports **Excel** (openpyxl) et **PDF** (ReportLab), ticket 80 mm |
