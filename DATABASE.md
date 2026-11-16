@@ -84,6 +84,11 @@ Base : **SQLite** locale, fichier unique dans le répertoire de données utilisa
 - `cash_movements` distingue espèces (`especes`) et moyens non espèces ;
   seules les espèces entrent dans le solde théorique de caisse.
 - `cash_sessions` conserve `theoretical_amount`, `counted_amount`, `difference`.
+- `cash_movements.corrects_session_id` (avec `corrected_at`, `correction_reason`)
+  identifie une correction rattachée à une session clôturée : l'écart est
+  recalculé, l'ancien reste dans `audit_logs`.
+- `expenses.cancelled_at` / `cancel_reason` : annulation logique d'une dépense,
+  qui sort des totaux sans être supprimée.
 
 ### Sauvegardes et documents
 `backup_history`, `document_sequences`, `generated_documents`.
@@ -109,6 +114,7 @@ alembic -x url=sqlite:///./dev.db check           # vérifie l'absence de diverg
   ventes suspendues).
 - `c25937c56bfc` ajoute remise/frais d'approche sur les commandes, le coût
   « landed » des lignes et le commentaire des paiements fournisseurs.
+- `2053a78bdf38` ajoute les corrections de caisse et l'annulation de dépenses.
 - `render_as_batch=True` : les modifications de colonnes sont possibles sur SQLite.
 - Au démarrage, l'application crée la base si besoin puis **applique les
   migrations en attente** (`init_engine` → `upgrade_database`) : une nouvelle

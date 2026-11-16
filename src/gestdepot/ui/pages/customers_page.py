@@ -15,7 +15,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...services.sales_service import PAYMENT_LABELS, PAYMENT_METHODS
+from ...domain.rules import PAYMENT_METHOD_LABELS as PAYMENT_LABELS
+from ...domain.rules import PAYMENT_METHODS
 from ..widgets import DataTable, Page, confirm, money, refresh_after
 
 

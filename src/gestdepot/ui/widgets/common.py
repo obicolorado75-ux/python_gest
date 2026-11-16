@@ -145,12 +145,18 @@ class Page(QWidget):
             self.root.addWidget(title_label(self.title))
         if self.subtitle:
             self.root.addWidget(subtitle_label(self.subtitle))
-        self.actions = QHBoxLayout()
-        self.actions.setSpacing(8)
+        # Barre d'actions : les boutons passent à la ligne au-delà de 4 par rangée
+        # (aucun libellé tronqué, y compris sur écran étroit — §5.1).
+        self.actions = QVBoxLayout()
+        self.actions.setSpacing(6)
         self.root.addLayout(self.actions)
+        self._action_buttons: list[QPushButton] = []
+        self._action_stretch = False
         self.body = QVBoxLayout()
         self.body.setSpacing(8)
         self.root.addLayout(self.body, 1)
+
+    ACTIONS_PER_ROW = 4
 
     def add_action(self, text: str, slot, primary: bool = False,
                    enabled: bool = True) -> QPushButton:
@@ -160,11 +166,32 @@ class Page(QWidget):
         if primary:
             button.setObjectName("PrimaryButton")
             button.setDefault(True)
-        self.actions.addWidget(button)
+        self._action_buttons.append(button)
+        self._render_actions()
         return button
 
     def add_stretch(self) -> None:
-        self.actions.addStretch(1)
+        self._action_stretch = True
+        self._render_actions()
+
+    def _render_actions(self) -> None:
+        """(Re)construit les rangées de boutons d'action."""
+        while self.actions.count():
+            item = self.actions.takeAt(0)
+            row = item.layout()
+            if row is not None:
+                while row.count():
+                    row.takeAt(0)
+                row.deleteLater()
+        buttons = list(self._action_buttons)
+        for start in range(0, len(buttons), self.ACTIONS_PER_ROW):
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            for button in buttons[start:start + self.ACTIONS_PER_ROW]:
+                row.addWidget(button)
+            if self._action_stretch or start + self.ACTIONS_PER_ROW >= len(buttons):
+                row.addStretch(1)
+            self.actions.addLayout(row)
 
     def refresh(self) -> None:  # surchargée par les pages
         pass

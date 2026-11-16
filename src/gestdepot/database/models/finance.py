@@ -103,6 +103,11 @@ class CashMovement(Base):
     document_id: Mapped[int | None] = mapped_column(Integer)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     comment: Mapped[str | None] = mapped_column(Text)
+    # une correction sur session clôturée référence la clôture corrigée (§5.12)
+    corrects_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cash_sessions.id"), index=True)
+    corrected_at: Mapped[datetime | None] = mapped_column(DateTime)
+    correction_reason: Mapped[str | None] = mapped_column(Text)
 
 
 class ExpenseCategory(Base):
@@ -124,6 +129,9 @@ class Expense(Base):
     comment: Mapped[str | None] = mapped_column(Text)
     session_id: Mapped[int | None] = mapped_column(ForeignKey("cash_sessions.id"))
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    # une dépense annulée n'est jamais supprimée (§4.6)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime)
+    cancel_reason: Mapped[str | None] = mapped_column(Text)
 
 
 class BackupHistory(Base):

@@ -13,6 +13,30 @@
 | 6 — Sécurité, sauvegarde | 🟡 partiel | audit, permissions, sauvegarde/restauration vérifiées ; permissions fines par action et tests de régression à étendre |
 | 7 — Packaging | ⬜ à faire | scripts de construction fournis, installateurs à produire sur Windows/macOS |
 
+## v0.1.3 — caisse et dépenses complètes (16 novembre 2026)
+
+### Ajouté
+
+- **Mouvements manuels de caisse** : retrait, apport et correction autorisée
+  (motif obligatoire), avec refus explicite de tout motif métier saisi à la main
+  (`encaissement_vente`, `depense`… proviennent des services concernés).
+- **Correction d'une session clôturée** (`correct_closed_session`) : mouvement
+  horodaté rattaché à la session (`corrects_session_id`, `corrected_at`,
+  `correction_reason`), recalcul du comptage et de l'écart, ancienne valeur
+  conservée dans l'audit ; onglet **Corrections** (migration `2053a78bdf38`).
+- **Dépenses** : date de la dépense (futur refusé), référence de justificatif,
+  catégorie obligatoire, **annulation motivée** par contre-mouvement
+  (`cancel_expense`) — la dépense reste consultable avec le statut « Annulée » et
+  sort des totaux ; répartition `expenses_by_category`.
+- **Catégories de dépenses** : écran de gestion, suppression refusée si la
+  catégorie est utilisée.
+- **Barre d'actions des écrans** : retour à la ligne automatique au-delà de
+  4 boutons (plus de libellé tronqué, §5.1).
+
+### Corrigé
+
+- L'écran caisse débordait à droite avec sept actions sur une seule ligne.
+
 ## v0.1.2 — achats et consignes complets (16 novembre 2026)
 
 ### Ajouté
@@ -89,7 +113,7 @@
 - **Rapports** : tableau de bord, marges, exports Excel et PDF.
 - **Sauvegarde** : copie cohérente via l'API SQLite, contrôle d'intégrité,
   empreinte SHA-256, restauration protégée par authentification et vérification.
-- **Tests** : 119 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
+- **Tests** : 146 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
   retours, achats/consignes, migrations et mise à niveau automatique, atomicité,
   schéma, exports, tickets, interface).
 

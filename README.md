@@ -22,7 +22,7 @@ consulter ou imprimer.
 | Achats | Fournisseurs, commandes avec remise et frais d'approche répartis dans le coût, réceptions partielles avec refus, factures, paiements fournisseurs, historique et réouverture auditée |
 | Ventes | Écran de saisie rapide, panier multi-conditionnements, remises, ventes à crédit avec plafond, paiements mixtes, ventes suspendues/reprises (F8), retours et annulations tracés |
 | Clients | Fiche, plafond de crédit, relevé de compte, règlements partiels (le CA n'est pas recalculé) |
-| Caisse | Ouverture, mouvements, dépenses, clôture avec écart conservé ; espèces séparées du Mobile Money |
+| Caisse | Ouverture, retraits/apports, dépenses datées et annulables, catégories, clôture avec écart conservé, corrections auditées des sessions clôturées ; espèces séparées du Mobile Money |
 | Rapports | Tableau de bord, marges, exports **Excel** (openpyxl) et **PDF** (ReportLab), ticket 80 mm |
 | Sauvegarde | Copie cohérente via l'API SQLite, contrôle `PRAGMA integrity_check`, empreinte SHA-256, restauration protégée |
 

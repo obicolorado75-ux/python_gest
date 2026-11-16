@@ -150,13 +150,30 @@ remboursement espèces ne dépasse jamais ce qui a été réellement encaissé.
 
 ![Caisse](docs/captures/cash.png)
 
-1. **Ouvrir une caisse** : saisissez le fond de caisse compté.
-2. Les encaissements espèces alimentent le solde théorique ; les paiements
-   Mobile Money et virements sont suivis séparément.
-3. **Nouvelle dépense** : catégorie, bénéficiaire, montant, moyen de paiement.
-   Une dépense en espèces diminue le solde théorique.
-4. **Clôturer la caisse** : saisissez le montant compté ; l'écart est calculé,
-   commenté et conservé dans l'historique.
+1. **Ouvrir une caisse** : saisissez le fond de caisse compté. Une seule session
+   par utilisateur ; le fond doit être exact car il sert de base au contrôle.
+2. **Retrait / apport** : sortie d'espèces vers la banque, apport de monnaie, ou
+   **correction autorisée** (motif obligatoire, réservée au rôle habilité).
+3. Les encaissements de ventes, règlements de créances, remboursements, paiements
+   fournisseurs et dépenses arrivent automatiquement dans le journal. Ils ne
+   peuvent pas être saisis à la main : on ne fabrique pas un encaissement.
+4. **Nouvelle dépense** : catégorie, bénéficiaire, montant, date, moyen de
+   paiement, référence du justificatif et commentaire. Une dépense en espèces
+   diminue le solde théorique ; un virement ou du Mobile Money sont suivis à part.
+5. **Annuler une dépense** : motif obligatoire. La dépense reste dans l'historique
+   avec le statut « Annulée » et le montant est réintégré à la caisse.
+6. **Clôturer la caisse** : saisissez le montant compté ; l'écart est calculé et
+   conservé, avec votre commentaire.
+7. **Corriger une caisse** : seule procédure autorisée pour toucher à une session
+   clôturée. La correction est un mouvement horodaté rattaché à la session, avec
+   motif obligatoire ; le montant compté et l'écart sont recalculés et l'ancien
+   écart reste dans le journal d'audit. L'onglet **Corrections** les liste.
+8. **Catégories de dépenses** : ajoutez vos catégories ; une catégorie déjà
+   utilisée ne peut pas être supprimée.
+
+Le solde physique de caisse ne comprend **que les espèces** : Orange Money, MTN,
+Moov, Wave, virements et chèques sont cumulés séparément sous le libellé de la
+session.
 
 ## 9. Inventaires
 

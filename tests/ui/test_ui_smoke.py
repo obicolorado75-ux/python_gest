@@ -280,3 +280,67 @@ class TestAchatsEtConsignes:
         dialog = PurchaseOrderHistoryDialog(window.services)
         assert dialog.orders.rowCount() == 1
         assert dialog.invoices.rowCount() == 0
+
+
+class TestCaisseEcran:
+    """§5.12 : écran caisse — mouvements, dépenses, corrections, catégories."""
+
+    def test_mouvement_retrait_et_apport(self, window, cash):
+        from gestdepot.ui.pages.cash_page import MovementDialog
+        cash_session = cash.open_session(opening_fund=10_000)
+        dialog = MovementDialog(window.services)
+        dialog.kind.setCurrentIndex(0)          # retrait
+        dialog.amount.setValue(2_000)
+        dialog._save()
+        assert cash.theoretical_amount(cash_session.id) == 8_000
+        dialog = MovementDialog(window.services)
+        dialog.kind.setCurrentIndex(1)          # apport
+        dialog.amount.setValue(1_000)
+        dialog._save()
+        assert cash.theoretical_amount(cash_session.id) == 9_000
+
+    def test_ecran_caisse_affiche_sessions_et_depenses(self, window, cash):
+        cash_session = cash.open_session(opening_fund=5_000)
+        cash.add_expense(1_000, cash.list_expense_categories()[0].id)
+        cash.close_session(cash_session.id, 4_000, "RAS")
+        window._select("cash")
+        page = window.pages["cash"]
+        page.refresh()
+        assert page.sessions.rowCount() == 1
+        assert page.expenses.rowCount() == 1
+        assert page.state_label.text().startswith("Aucune session")
+
+    def test_annulation_depense_depuis_ecran(self, window, cash, monkeypatch):
+        from PySide6.QtWidgets import QInputDialog
+        cash.open_session(opening_fund=5_000)
+        cash.add_expense(1_000, cash.list_expense_categories()[0].id)
+        window._select("cash")
+        page = window.pages["cash"]
+        page.refresh()
+        page.tabs.setCurrentIndex(1)
+        page.expenses.selectRow(0)
+        monkeypatch.setattr(QInputDialog, "getText",
+                            staticmethod(lambda *a, **k: ("Erreur", True)))
+        page.cancel_expense()
+        assert "[Annulée]" not in page.expenses.value(0, 7)
+        assert page.expenses.value(0, 7) == "Annulée"
+
+    def test_categorie_dialog_ajout(self, window, cash):
+        from gestdepot.ui.pages.cash_page import CategoryDialog
+        dialog = CategoryDialog(window.services)
+        before = dialog.table.rowCount()
+        dialog.name.setText("Carburant")
+        dialog._add()
+        assert dialog.table.rowCount() == before + 1
+        assert "Carburant" in [c.name for c in cash.list_expense_categories()]
+
+    def test_dialogue_correction(self, window, cash):
+        from gestdepot.ui.pages.cash_page import CorrectionDialog
+        cash_session = cash.open_session(opening_fund=2_000)
+        closed = cash.close_session(cash_session.id, 1_500)
+        dialog = CorrectionDialog(window.services, closed)
+        dialog.direction.setCurrentIndex(0)
+        dialog.amount.setValue(500)
+        dialog.reason.setText("Billet retrouvé")
+        dialog._save()
+        assert cash.get_session(closed.id).difference == 0
