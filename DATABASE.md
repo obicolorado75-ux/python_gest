@@ -96,6 +96,19 @@ Base : **SQLite** locale, fichier unique dans le répertoire de données utilisa
 - `expenses.cancelled_at` / `cancel_reason` : annulation logique d'une dépense,
   qui sort des totaux sans être supprimée.
 
+### Commandes clients et livraisons (§5.10)
+- `customer_orders` / `customer_order_lines` : brouillon sans effet stock, statuts
+  `draft/confirmed/preparing/ready/partially_delivered/delivered/cancelled`,
+  tarif, remise, frais, adresse ; `reserved_qty` et `delivered_qty` par ligne.
+- `deliveries` / `delivery_lines` : `prepared_qty`, `delivered_qty`,
+  `delivered_at`, `failure_reason`, `collected_amount`, `payment_method`,
+  `proof_comment` ; statuts `pending/preparing/in_transit/delivered/partial/
+  failed/cancelled`.
+- La sortie de stock n'existe qu'une fois par livraison : elle est portée par le
+  mouvement `sortie_vente` de la vente créée à la confirmation.
+- Réglage `deliveries.reserve_stock` (`app_settings`) : réservation activée par
+  défaut.
+
 ### Sauvegardes et documents
 `backup_history`, `document_sequences`, `generated_documents`.
 

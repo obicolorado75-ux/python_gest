@@ -565,3 +565,74 @@ class TestEcranDeConnexion:
         dialog._login()
         assert dialog.result() == QDialog.Accepted
         assert dialog.username == "admin"
+
+
+class TestLivraisonsEcran:
+    """§5.10 : commandes, préparation, livraison et reliquat depuis l'écran."""
+
+    @pytest.fixture()
+    def ordered(self, window, stocked_product):
+        product, _ = stocked_product
+        customer = window.services["sales"].create_customer(
+            code="CLI-UI", name="Maquis UI", address="Abidjan")
+        order = window.services["delivery"].create_order(
+            customer.id,
+            [{"product_id": product.id, "packaging_id": None,
+              "quantity_display": 10}],
+            reserve_stock=False)
+        return {"order": order, "product": product, "customer": customer}
+
+    def test_ecran_livre_commandes_et_livraisons(self, window):
+        window._select("deliveries")
+        page = window.pages["deliveries"]
+        page.refresh()
+        assert page.tabs.count() == 2
+        assert page.orders_table.columnCount() == 8
+        assert page.deliveries_table.columnCount() == 9
+
+    def test_commande_confirmee_et_livree_depuis_l_ecran(self, window, ordered,
+                                                         stocked_product, monkeypatch):
+
+        window._select("deliveries")
+        page = window.pages["deliveries"]
+        page.refresh()
+        row = next(index for index, order in enumerate(page._orders)
+                   if order.id == ordered["order"].id)
+        page.orders_table.selectRow(row)
+        page.confirm_order()
+        assert window.services["delivery"].get_order(
+            ordered["order"].id)["status"] == "confirmed"
+
+        # planification directe par le service (le dialogue est testé à part)
+        shipment = window.services["delivery"].plan_delivery(
+            ordered["order"].id, driver="Yao")
+        page.refresh()
+
+        class _Dialog:
+            def exec(self_inner):
+                self_inner.result = window.services["delivery"].confirm_delivery(
+                    shipment.id, collected_amount=0)
+                return 1
+
+        monkeypatch.setattr("gestdepot.ui.pages.deliveries_page."
+                            "ConfirmDeliveryDialog", lambda *a, **k: _Dialog())
+        row = next(index for index, delivery in enumerate(page._deliveries)
+                   if delivery.id == shipment.id)
+        page.deliveries_table.selectRow(row)
+        page.confirm_delivery()
+        detail = window.services["delivery"].get_delivery(shipment.id)
+        assert detail["status"] == "delivered"
+
+    def test_etat_vide(self, window):
+        window._select("deliveries")
+        page = window.pages["deliveries"]
+        page.refresh()
+        assert page.orders_table.rowCount() == 0
+        assert page._orders == []
+
+    def test_filtre_par_statut(self, window, ordered):
+        window._select("deliveries")
+        page = window.pages["deliveries"]
+        page.filter.setCurrentIndex(1)   # brouillon
+        page.refresh()
+        assert all(order.status == "draft" for order in page._orders)

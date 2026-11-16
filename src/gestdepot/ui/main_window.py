@@ -22,6 +22,7 @@ from ..services.admin_service import AdminService
 from ..services.backup_service import BackupError, BackupService
 from ..services.cash_service import CashService
 from ..services.catalog_service import CatalogService
+from ..services.delivery_service import DeliveryService
 from ..services.deposit_service import DepositService
 from ..services.inventory_service import InventoryService
 from ..services.reporting_service import ReportingService
@@ -30,6 +31,7 @@ from ..services.stock_service import StockService
 from .pages.cash_page import CashPage
 from .pages.customers_page import CustomersPage
 from .pages.dashboard_page import DashboardPage
+from .pages.deliveries_page import DeliveryPage
 from .pages.deposits_page import DepositsPage
 from .pages.inventory_page import InventoryPage
 from .pages.products_page import ProductsPage
@@ -46,6 +48,7 @@ NAVIGATION = [
     ("Stocks et mouvements", "stock", "Stock et journal des mouvements"),
     ("Consignes et emballages", "deposits", "Emballages et comptes de consigne"),
     ("Clients et crédits", "customers", "Clients, créances, règlements"),
+    ("Commandes et livraisons", "deliveries", "Bons de livraison et reliquats"),
     ("Achats et réapprovisionnement", "purchases", "Fournisseurs et réceptions"),
     ("Caisse et dépenses", "cash", "Sessions de caisse et dépenses"),
     ("Inventaires", "inventory", "Comptage physique et écarts"),
@@ -60,6 +63,7 @@ PAGES = {
     "stock": StockPage,
     "deposits": DepositsPage,
     "customers": CustomersPage,
+    "deliveries": DeliveryPage,
     "purchases": PurchasesPage,
     "cash": CashPage,
     "inventory": InventoryPage,
@@ -84,6 +88,7 @@ class MainWindow(QMainWindow):
             "sales": SalesService(),
             "cash": CashService(),
             "deposit": DepositService(),
+            "delivery": DeliveryService(),
             "inventory": InventoryService(),
             "reporting": ReportingService(),
             "backup": BackupService(),

@@ -215,6 +215,44 @@ Menu **Marges et rapports** : choisissez le rapport et la période, puis
 ils ne modifient jamais les données. Les tickets et rapports PDF incluent le nom
 et les coordonnées du dépôt.
 
+## 10 bis. Commandes clients et livraisons
+
+![Commandes](docs/captures/deliveries.png)
+
+![Livraisons](docs/captures/deliveries_tab.png)
+
+Écran **Commandes et livraisons**, deux onglets.
+
+### Commandes
+
+1. **Nouvelle commande** : client, produit + conditionnement + quantité (ajoutez
+   les lignes une à une), tarif, date souhaitée, adresse, frais de livraison.
+   La commande est enregistrée en **brouillon** : elle ne touche pas le stock.
+2. **Confirmer la commande** : si la case « Réserver le stock » était cochée, les
+   quantités sont réservées ; elles ne peuvent plus être vendues une deuxième
+   fois. Si le stock est insuffisant, l'application refuse et propose de
+   commander sans réserver.
+3. **Prête à livrer** : marque la commande prête (statuts : confirmée → en
+   préparation → prête).
+4. **Annuler la commande** : motif obligatoire ; la réservation est libérée.
+
+### Livraisons
+
+5. **Planifier une livraison** : commande, date prévue, chauffeur, véhicule,
+   adresse, frais. Les quantités **préparées** sont recopiées du reliquat — rien
+   ne sort du stock à ce stade.
+6. **Départ du livreur** : statut « en route ».
+7. **Confirmer la livraison** : saisissez les quantités **réellement livrées**
+   (elles peuvent être inférieures au préparé), la preuve/commentaire et
+   l'encaissement éventuel. L'application crée alors la vente, sort le stock
+   **une seule fois** et met à jour la créance. Une quantité inférieure laisse un
+   **reliquat** visible sur la commande ; replanifiez une livraison pour le
+   reste.
+8. **Échec de livraison** : motif obligatoire. La commande et les paiements déjà
+   reçus sont conservés — replanifiez la livraison.
+9. **Bon de livraison** : génère un document A4 dans le dossier documents
+   (`bon_livraison_LIV-….html`), prêt à imprimer et à signer.
+
 ## 11. Raccourcis clavier
 
 | Touche | Action |

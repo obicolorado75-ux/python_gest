@@ -115,8 +115,10 @@ class SalesService:
                         raise SalesError(
                             f"Stock insuffisant pour {product.name} : "
                             f"disponible {avail}, demandé {qty_base}.")
-                price = self.catalog.resolve_price(product.id, price_list_id,
-                                                   packaging_id)
+                # un prix négocié (commande client, §5.10) fait foi
+                override = it.get("unit_price")
+                price = int(override) if override else self.catalog.resolve_price(
+                    product.id, price_list_id, packaging_id)
                 if price <= 0:
                     raise SalesError(
                         f"Aucun prix défini pour {product.name} ({unit_label}).")
@@ -124,8 +126,9 @@ class SalesService:
                 # total de ligne = prix au conditionnement × nb de conditionnements
                 #                    + reliquat à l'unité de base (§7.5)
                 if packaging_id:
-                    unit_base_price = self.catalog.resolve_price(
-                        product.id, price_list_id, None)
+                    unit_base_price = (
+                        price if override else self.catalog.resolve_price(
+                            product.id, price_list_id, None))
                     line_total = qty_display * price + base_qty * unit_base_price
                 else:
                     line_total = qty_base * price
@@ -190,20 +193,21 @@ class SalesService:
                 f"({total} ≠ {paid_amount}).")
         return cleaned
 
-    def confirm_sale(self, items: list[dict], payment_method: str | None = None,
+    def prepare_sale(self, items: list[dict], payment_method: str | None = None,
                      paid_amount: int = 0, customer_id: int | None = None,
                      price_list_id: int | None = None, manual_discount: int = 0,
                      deposit_packaging_id: int | None = None,
                      deposit_qty: int = 0,
                      allow_credit_excess: bool = False,
                      note: str | None = None,
-                     payments: list[dict] | None = None) -> Sale:
-        """Vente complète en une transaction (T03–T06, §7.2).
+                     payments: list[dict] | None = None,
+                     delivery_fees: int = 0,
+                     check_stock: bool = True) -> dict:
+        """Valide et calcule une vente sans l'écrire (§5.5, §5.10).
 
-        ``payments`` permet un paiement mixte : [{"method": "especes",
-        "amount": 10000}, {"method": "wave", "amount": 5000}]. Les arguments
-        ``payment_method``/``paid_amount`` restent valables pour un règlement
-        unique (rétro-compatibilité des appels et des tests).
+        Utilisé par ``confirm_sale`` et par la confirmation de livraison : les
+        règles (stock, plafond de crédit, moyens de paiement, consignes) sont
+        ainsi contrôlées une seule fois, au même endroit.
         """
         common.require("sales.create")
         if paid_amount < 0:
@@ -222,7 +226,8 @@ class SalesService:
         if main_method is not None and main_method not in payment_codes():
             raise SalesError("Moyen de paiement inconnu.")
 
-        prep = self.draft_lines(items, price_list_id, manual_discount)
+        prep = self.draft_lines(items, price_list_id, manual_discount,
+                                check_stock=check_stock)
         total_goods = prep["total"]
         deposit_amount = 0
         if deposit_qty > 0:
@@ -233,17 +238,16 @@ class SalesService:
                 if rp is None:
                     raise SalesError("Type d'emballage inconnu.")
                 deposit_amount = rp.deposit_value * deposit_qty
-        total = total_goods + deposit_amount
+        if delivery_fees and delivery_fees < 0:
+            raise SalesError("Frais de livraison invalides.")
+        total = total_goods + deposit_amount + (delivery_fees or 0)
         if paid_amount > total:
             raise SalesError("Le montant encaissé dépasse le total à payer.")
         credit = total - paid_amount
         if credit > 0 and not customer_id:
             raise SalesError("Vente à crédit impossible sans client identifié.")
-
-        user_id = common.current_user_id()
-        with session_scope() as s:
-            customer = None
-            if customer_id:
+        if customer_id:
+            with session_scope() as s:
                 customer = s.get(Customer, customer_id)
                 if customer is None:
                     raise SalesError("Client introuvable.")
@@ -258,85 +262,167 @@ class SalesService:
                             raise SalesError(
                                 f"Plafond de crédit dépassé : dû {customer.balance} + "
                                 f"{credit} > plafond {customer.credit_limit}.")
-                        auth.log("credit_limit_override", "Customer", customer.id,
-                                 new_value=str(projected), session=s)
+        return {"prep": prep, "settled": settled, "main_method": main_method,
+                "paid_amount": paid_amount, "credit": credit, "total": total,
+                "total_goods": total_goods, "deposit_amount": deposit_amount,
+                "deposit_qty": deposit_qty,
+                "deposit_packaging_id": deposit_packaging_id,
+                "manual_discount": manual_discount,
+                "allow_credit_excess": allow_credit_excess, "note": note,
+                "delivery_fees": delivery_fees or 0}
 
-            number = next_document_number(s, "VTE")
-            cash_session = common.open_cash_session(s, user_id)
-            sale = Sale(number=number, customer_id=customer_id, status="confirmed",
-                        total_amount=total, discount_amount=manual_discount,
-                        deposit_amount=deposit_amount, paid_amount=paid_amount,
-                        payment_method=main_method or "especes",
-                        cash_session_id=cash_session.id if cash_session else None,
-                        user_id=user_id, note=note)
-            s.add(sale)
+    def confirm_sale(self, items: list[dict], payment_method: str | None = None,
+                     paid_amount: int = 0, customer_id: int | None = None,
+                     price_list_id: int | None = None, manual_discount: int = 0,
+                     deposit_packaging_id: int | None = None,
+                     deposit_qty: int = 0,
+                     allow_credit_excess: bool = False,
+                     note: str | None = None,
+                     payments: list[dict] | None = None,
+                     delivery_fees: int = 0,
+                     session: Session | None = None,
+                     delivery_id: int | None = None) -> Sale:
+        """Vente complète en une transaction (T03–T06, §7.2).
+
+        ``payments`` permet un paiement mixte : [{"method": "especes",
+        "amount": 10000}, {"method": "wave", "amount": 5000}]. Les arguments
+        ``payment_method``/``paid_amount`` restent valables pour un règlement
+        unique (rétro-compatibilité des appels et des tests).
+
+        ``session`` permet d'inscrire la vente dans une transaction déjà
+        ouverte (confirmation de livraison, §5.10) : rien n'est validé ici.
+        """
+        prepared = self.prepare_sale(
+            items, payment_method=payment_method, paid_amount=paid_amount,
+            customer_id=customer_id, price_list_id=price_list_id,
+            manual_discount=manual_discount,
+            deposit_packaging_id=deposit_packaging_id, deposit_qty=deposit_qty,
+            allow_credit_excess=allow_credit_excess, note=note,
+            payments=payments, delivery_fees=delivery_fees)
+        kwargs = dict(
+            prep=prepared["prep"], settled=prepared["settled"],
+            main_method=prepared["main_method"], customer_id=customer_id,
+            manual_discount=manual_discount,
+            deposit_packaging_id=deposit_packaging_id,
+            deposit_qty=deposit_qty, total=prepared["total"],
+            deposit_amount=prepared["deposit_amount"],
+            paid_amount=prepared["paid_amount"], credit=prepared["credit"],
+            allow_credit_excess=allow_credit_excess, note=note,
+            delivery_fees=prepared["delivery_fees"], delivery_id=delivery_id)
+        if session is not None:
+            return self._apply_sale(session, **kwargs)
+        with session_scope() as s:
+            return self._apply_sale(s, **kwargs)
+
+    def _apply_sale(self, s: Session, *, prep: dict, settled: list[dict],
+                    main_method: str | None, customer_id: int | None,
+                    manual_discount: int, deposit_packaging_id: int | None,
+                    deposit_qty: int, total: int, deposit_amount: int,
+                    paid_amount: int, credit: int, allow_credit_excess: bool,
+                    note: str | None, delivery_fees: int = 0,
+                    delivery_id: int | None = None) -> Sale:
+        """Écrit la vente complète dans la transaction fournie (§7.2).
+
+        Extrait de ``confirm_sale`` pour être réutilisable par les livraisons :
+        vente + stock + paiements + caisse + créance restent atomiques, quel que
+        soit le point d'entrée (comptoir ou confirmation de livraison).
+        """
+        user_id = common.current_user_id()
+        customer = None
+        if customer_id:
+            customer = s.get(Customer, customer_id)
+            if customer is None:
+                raise SalesError("Client introuvable.")
+            if not customer.active:
+                raise SalesError("Client inactif.")
+            if credit > 0 and customer.credit_limit > 0:
+                projected = customer.balance + credit
+                if projected > customer.credit_limit:
+                    # T04/§5.5 : blocage sauf autorisation explicite tracée
+                    if not allow_credit_excess or not common.has_permission(
+                            "customers.credit_override"):
+                        raise SalesError(
+                            f"Plafond de crédit dépassé : dû {customer.balance} + "
+                            f"{credit} > plafond {customer.credit_limit}.")
+                    auth.log("credit_limit_override", "Customer", customer.id,
+                             new_value=str(projected), session=s)
+
+        number = next_document_number(s, "VTE")
+        cash_session = common.open_cash_session(s, user_id)
+        sale = Sale(number=number, customer_id=customer_id, status="confirmed",
+                    total_amount=total, discount_amount=manual_discount,
+                    deposit_amount=deposit_amount, paid_amount=paid_amount,
+                    payment_method=main_method or "especes",
+                    cash_session_id=cash_session.id if cash_session else None,
+                    user_id=user_id, note=note)
+        s.add(sale)
+        s.flush()
+
+        for ln in prep["lines"]:
+            # la collection est alimentée en mémoire pour rester lisible
+            # après fermeture de la session (objets détachés)
+            sale.lines.append(SaleLine(
+                sale=sale, product_id=ln["product_id"],
+                packaging_id=ln["packaging_id"], designation=ln["designation"],
+                unit_label=ln["unit_label"], quantity=ln["quantity"],
+                quantity_display=ln["quantity_display"],
+                unit_price=ln["unit_price"], discount=0,
+                unit_cost=ln["unit_cost"], total=ln["total"]))
+            try:
+                # sortie de stock, coût CMP figé sur la ligne de vente
+                self.stock._apply(s, ln["product_id"], -ln["quantity"],
+                                  "sortie_vente", document_type="sale",
+                                  document_id=sale.id,
+                                  unit_cost=ln["unit_cost"])
+            except StockError as exc:
+                raise SalesError(str(exc)) from exc
+
+        # consignes : emballages remis au client, distincts du CA (§5.8)
+        if deposit_amount:
+            rp = s.get(ReturnablePackaging, deposit_packaging_id)
+            s.add(DepositMovement(packaging_id=deposit_packaging_id,
+                                  quantity=deposit_qty, reason="remis_client",
+                                  customer_id=customer_id,
+                                  document_type="sale", document_id=sale.id,
+                                  deposit_value=rp.deposit_value,
+                                  user_id=user_id))
+            self._cash_movement(s, cash_session, "in", deposit_amount,
+                                main_method or "especes", "consigne",
+                                "sale", sale.id)
+
+        # paiement + caisse (§5.12) — un règlement par moyen (paiement mixte)
+        goods_left = prep["total"]
+        for entry in settled:
+            method, amount = entry["method"], entry["amount"]
+            cp = CustomerPayment(number=next_document_number(s, "PAY"),
+                                 customer_id=customer_id, amount=amount,
+                                 payment_method=method, sale_id=sale.id,
+                                 cash_session_id=cash_session.id
+                                 if cash_session else None,
+                                 user_id=user_id)
+            s.add(cp)
             s.flush()
+            s.add(SalePayment(sale_id=sale.id, payment_method=method,
+                              amount=amount, payment_id=cp.id))
+            allocated = min(amount, goods_left)
+            if allocated > 0:
+                s.add(PaymentAllocation(payment_id=cp.id, sale_id=sale.id,
+                                        amount=allocated))
+                goods_left -= allocated
+            self._cash_movement(s, cash_session, "in", amount, method,
+                                "encaissement_vente", "sale", sale.id)
 
-            for ln in prep["lines"]:
-                # la collection est alimentée en mémoire pour rester lisible
-                # après fermeture de la session (objets détachés)
-                sale.lines.append(SaleLine(
-                    sale=sale, product_id=ln["product_id"],
-                    packaging_id=ln["packaging_id"], designation=ln["designation"],
-                    unit_label=ln["unit_label"], quantity=ln["quantity"],
-                    quantity_display=ln["quantity_display"],
-                    unit_price=ln["unit_price"], discount=0,
-                    unit_cost=ln["unit_cost"], total=ln["total"]))
-                try:
-                    # sortie de stock, coût CMP figé sur la ligne de vente
-                    self.stock._apply(s, ln["product_id"], -ln["quantity"],
-                                      "sortie_vente", document_type="sale",
-                                      document_id=sale.id,
-                                      unit_cost=ln["unit_cost"])
-                except StockError as exc:
-                    raise SalesError(str(exc)) from exc
+        # créance (§5.9)
+        if credit > 0:
+            assert customer is not None
+            customer.balance += credit
+            s.add(CustomerCreditEvent(customer_id=customer.id, delta=credit,
+                                      reason="vente_credit",
+                                      document_type="sale", document_id=sale.id))
 
-            # consignes : emballages remis au client, distincts du CA (§5.8)
-            if deposit_amount:
-                rp = s.get(ReturnablePackaging, deposit_packaging_id)
-                s.add(DepositMovement(packaging_id=deposit_packaging_id,
-                                      quantity=deposit_qty, reason="remis_client",
-                                      customer_id=customer_id,
-                                      document_type="sale", document_id=sale.id,
-                                      deposit_value=rp.deposit_value,
-                                      user_id=user_id))
-                self._cash_movement(s, cash_session, "in", deposit_amount,
-                                    main_method or "especes", "consigne",
-                                    "sale", sale.id)
-
-            # paiement + caisse (§5.12) — un règlement par moyen (paiement mixte)
-            goods_left = total_goods
-            for entry in settled:
-                method, amount = entry["method"], entry["amount"]
-                cp = CustomerPayment(number=next_document_number(s, "PAY"),
-                                     customer_id=customer_id, amount=amount,
-                                     payment_method=method, sale_id=sale.id,
-                                     cash_session_id=cash_session.id
-                                     if cash_session else None,
-                                     user_id=user_id)
-                s.add(cp)
-                s.flush()
-                s.add(SalePayment(sale_id=sale.id, payment_method=method,
-                                  amount=amount, payment_id=cp.id))
-                allocated = min(amount, goods_left)
-                if allocated > 0:
-                    s.add(PaymentAllocation(payment_id=cp.id, sale_id=sale.id,
-                                            amount=allocated))
-                    goods_left -= allocated
-                self._cash_movement(s, cash_session, "in", amount, method,
-                                    "encaissement_vente", "sale", sale.id)
-
-            # créance (§5.9)
-            if credit > 0:
-                assert customer is not None
-                customer.balance += credit
-                s.add(CustomerCreditEvent(customer_id=customer.id, delta=credit,
-                                          reason="vente_credit",
-                                          document_type="sale", document_id=sale.id))
-
-            auth.log("sale_confirm", "Sale", sale.id,
-                     new_value=f"{number}={total}", session=s)
-            return sale
+        auth.log("sale_confirm", "Sale", sale.id,
+                 new_value=f"{number}={total}", session=s)
+        return sale
 
     def _cash_movement(self, s: Session, cash_session, direction: str, amount: int,
                        method: str, reason: str, doc_type=None, doc_id=None):

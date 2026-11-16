@@ -8,10 +8,37 @@
 | 1 — Fondations et catalogue | ✅ fait (P0) | architecture en couches, migrations, connexion (logo, mot de passe/PIN, limitation, journalisation), utilisateurs/rôles, paramètres, moyens de paiement configurables, catégories, marques, unités, conditionnements, produits, tarifs, import contrôlé |
 | 2 — Stocks, achats | ✅ P0 livré | journal immuable, soldes, CMP, fournisseurs, commandes (remise + frais d'approche), réceptions avec refus, paiements fournisseurs, inventaires, consignes et emballages |
 | 3 — Caisse et ventes | ✅ P0 livré | POS, panier, tarifs, remises, paiements mixtes, crédit, retours, annulations, ventes suspendues (F8), ticket |
-| 4 — Clients, livraisons, finances | 🟡 partiel | clients, crédits, relevés, paiements affectés, sessions de caisse, dépenses ; livraisons et commandes clients à faire (P1) |
+| 4 — Clients, livraisons, finances | ✅ P1 livré | clients, crédits, relevés, paiements affectés, commandes clients et livraisons (réservation, reliquats, bons de livraison), sessions de caisse, dépenses |
 | 5 — Inventaires, analyses, rapports | 🟡 P0 livré | inventaires guidés, tableau de bord, marges, exports Excel/PDF ; rapports spécialisés à compléter |
 | 6 — Sécurité, sauvegarde | ✅ P0 livré | audit, permissions vérifiées dans la couche métier, sauvegarde/restauration vérifiées avec politique (dossier, rétention) et écran dédié |
 | 7 — Packaging | ⬜ à faire | scripts de construction fournis, installateurs à produire sur Windows/macOS |
+
+## v0.1.6 — commandes clients et livraisons (16 novembre 2026)
+
+### Ajouté
+
+- **Commandes clients** (`CMD-…`) : brouillon sans effet sur le stock, tarif du
+  client ou tarif choisi, remise, adresse, date souhaitée, frais de livraison.
+  Statuts : brouillon → confirmée → en préparation → prête → partiellement
+  livrée → livrée, annulation avec motif.
+- **Réservation de stock optionnelle** (par commande, valeur par défaut
+  réglable) : la quantité réservée n'est plus disponible pour une autre vente.
+- **Livraisons** (`LIV-…`) : chauffeur, véhicule, adresse, date prévue, frais,
+  quantités préparées puis **réellement livrées**, preuve et encaissement à la
+  livraison.
+- **Sortie de stock unique** : la vente est créée à la confirmation de la
+  livraison, dans la même transaction (vente + stock + paiements + caisse +
+  créance + consignes). Une seconde confirmation est refusée.
+- **Reliquats** : une livraison partielle laisse un reliquat explicite sur la
+  commande, livrable par une nouvelle tournée.
+- **Échec de livraison** : motif obligatoire ; ni la commande ni les paiements
+  déjà reçus ne sont effacés.
+- **Bon de livraison A4** imprimable (HTML, `generated_documents`), avec zones de
+  signature livreur / client.
+- Migration `97151b198b7d` (colonnes de commande, reliquats, préparation), écran
+  « Commandes et livraisons » à deux onglets.
+- `SalesService.prepare_sale()` factorise les contrôles de vente ; `draft_lines`
+  accepte un prix négocié de commande.
 
 ## v0.1.5 — politique de sauvegarde pilotable (16 novembre 2026)
 
@@ -187,7 +214,7 @@
 - **Rapports** : tableau de bord, marges, exports Excel et PDF.
 - **Sauvegarde** : copie cohérente via l'API SQLite, contrôle d'intégrité,
   empreinte SHA-256, restauration protégée par authentification et vérification.
-- **Tests** : 217 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
+- **Tests** : 245 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
   retours, achats/consignes, migrations et mise à niveau automatique, atomicité,
   schéma, exports, tickets, interface).
 

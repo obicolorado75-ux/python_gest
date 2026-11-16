@@ -112,3 +112,98 @@ def write_receipt(sale, company: dict | None = None, lines: list | None = None,
         except Exception:  # pragma: no cover - dépend du poste
             pass
     return path
+
+
+DOCUMENT_CSS = """
+@page { size: A4; margin: 14mm; }
+body { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 11px; color: #111; }
+h1 { font-size: 17px; margin: 0 0 1mm; }
+h2 { font-size: 13px; margin: 4mm 0 1mm; }
+.muted { color: #555; }
+.head { display: flex; justify-content: space-between; margin-bottom: 4mm; }
+table { width: 100%; border-collapse: collapse; margin-top: 2mm; }
+th, td { border-bottom: 1px solid #ccc; padding: 1.5mm 1mm; text-align: left; }
+td.amount, th.amount { text-align: right; white-space: nowrap; }
+td.qty, th.qty { text-align: center; }
+.signature { margin-top: 12mm; display: flex; justify-content: space-between; }
+.signature div { width: 45%; border-top: 1px solid #888; padding-top: 2mm; }
+.footer { margin-top: 8mm; font-size: 9px; color: #555; text-align: center; }
+"""
+
+
+def delivery_note_html(delivery: dict, company: dict | None = None) -> str:
+    """Bon de livraison A4 (§5.10) — imprimable sans imprimante supposée.
+
+    ``delivery`` est le dictionnaire retourné par ``DeliveryService.get_delivery``.
+    """
+    company = company or {}
+    rows = []
+    for line in delivery.get("lines", []):
+        quantity = line.get("delivered_qty") or line.get("prepared_qty") or 0
+        unit_price = line.get("unit_price") or 0
+        rows.append(
+            f"<tr><td>{_esc(line.get('designation'))}</td>"
+            f"<td>{_esc(line.get('unit_label'))}</td>"
+            f"<td class='qty'>{quantity}</td>"
+            f"<td class='amount'>{format_xof(unit_price * quantity)}</td></tr>")
+    total = sum((line.get("delivered_qty") or line.get("prepared_qty") or 0)
+                * (line.get("unit_price") or 0)
+                for line in delivery.get("lines", []))
+    return f"""<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<title>Bon de livraison {_esc(delivery.get('number'))}</title>
+<style>{DOCUMENT_CSS}</style></head>
+<body>
+<div class="head">
+  <div><h1>{_esc(company.get('name') or 'GestDepot')}</h1>
+    <div class="muted">{_esc(company.get('address') or '')}<br>
+    {_esc(company.get('phone') or '')}</div></div>
+  <div class="muted">
+    <b>Bon de livraison</b><br>
+    N° {_esc(delivery.get('number'))}<br>
+    Date : {datetime.now():%d/%m/%Y}<br>
+    Commande : {_esc(delivery.get('order_number') or '—')}
+  </div>
+</div>
+<h2>Client</h2>
+<div>{_esc(delivery.get('customer'))}</div>
+<div class="muted">{_esc(delivery.get('address') or '')}</div>
+<h2>Marchandise</h2>
+<table>
+  <thead><tr><th>Désignation</th><th>Conditionnement</th>
+  <th class="qty">Quantité</th><th class="amount">Montant</th></tr></thead>
+  <tbody>{"".join(rows) or '<tr><td colspan="4">Aucune ligne</td></tr>'}</tbody>
+</table>
+<table>
+  <tr><td>Total marchandise</td><td class="amount">{format_xof(total)}</td></tr>
+  <tr><td>Frais de livraison</td>
+      <td class="amount">{format_xof(delivery.get('fee') or 0)}</td></tr>
+  <tr><td><b>Total</b></td>
+      <td class="amount"><b>{format_xof(total + (delivery.get('fee') or 0))}</b></td></tr>
+  <tr><td>Encaissé à la livraison</td>
+      <td class="amount">{format_xof(delivery.get('collected_amount') or 0)}</td></tr>
+</table>
+<div class="muted">Livreur : {_esc(delivery.get('driver') or '—')}
+  · Véhicule : {_esc(delivery.get('vehicle') or '—')}</div>
+<div class="muted">Statut : {_esc(delivery.get('status_label') or '')}
+  {_esc(delivery.get('proof') or '')}</div>
+<div class="signature">
+  <div>Signature du livreur</div><div>Signature et cachet du client</div>
+</div>
+<div class="footer">{_esc(company.get('document_footer') or '')}<br>
+GestDepot — document généré hors ligne</div>
+</body></html>"""
+
+
+def write_document(name: str, content: str, open_after: bool = False) -> str:
+    """Écrit un document HTML dans le dossier documents et retourne son chemin."""
+    path = str(_documents_dir() / f"{name}.html")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(content)
+    if open_after:
+        import webbrowser
+        try:  # pragma: no cover - dépend du poste
+            webbrowser.open(f"file://{os.path.abspath(path)}")
+        except Exception:
+            pass
+    return path
