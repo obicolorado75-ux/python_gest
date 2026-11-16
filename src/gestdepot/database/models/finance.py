@@ -5,6 +5,7 @@ from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Tex
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+from .sales import Customer  # noqa: F401  (annotation de relation)
 
 
 class CustomerOrder(Base):
@@ -20,10 +21,17 @@ class CustomerOrder(Base):
     reserve_stock: Mapped[bool] = mapped_column(Boolean, default=False)
     total_amount: Mapped[int] = mapped_column(Integer, default=0)
     delivery_fee: Mapped[int] = mapped_column(Integer, default=0)
+    price_list_id: Mapped[int | None] = mapped_column(ForeignKey("price_lists.id"))
+    discount_amount: Mapped[int] = mapped_column(Integer, default=0)
+    address: Mapped[str | None] = mapped_column(Text)
+    cancelled_reason: Mapped[str | None] = mapped_column(Text)
     note: Mapped[str | None] = mapped_column(Text)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
 
     lines: Mapped[list["CustomerOrderLine"]] = relationship(back_populates="order", lazy="selectin")
+    deliveries: Mapped[list["Delivery"]] = relationship(back_populates="order",
+                                                        lazy="selectin")
+    customer: Mapped["Customer"] = relationship(lazy="joined")
 
 
 class CustomerOrderLine(Base):
@@ -33,13 +41,20 @@ class CustomerOrderLine(Base):
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
     packaging_id: Mapped[int | None] = mapped_column(ForeignKey("product_packagings.id"))
     designation: Mapped[str] = mapped_column(String(200))
+    unit_label: Mapped[str] = mapped_column(String(60), default="Unité")
     quantity: Mapped[int] = mapped_column(Integer)          # unités de base
     quantity_display: Mapped[int] = mapped_column(Integer, default=1)
     unit_price: Mapped[int] = mapped_column(Integer)
     delivered_qty: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_qty: Mapped[int] = mapped_column(Integer, default=0)
     total: Mapped[int] = mapped_column(Integer)
 
     order: Mapped["CustomerOrder"] = relationship(back_populates="lines")
+
+    @property
+    def remaining(self) -> int:
+        """Reliquat à livrer, en unités de base."""
+        return max(self.quantity - self.delivered_qty, 0)
 
 
 class Delivery(Base):
@@ -53,20 +68,37 @@ class Delivery(Base):
     vehicle: Mapped[str | None] = mapped_column(String(120))
     address: Mapped[str | None] = mapped_column(Text)
     scheduled_date: Mapped[Date | None] = mapped_column(Date)
-    status: Mapped[str] = mapped_column(String(30), default="pending")
-    # pending, preparing, in_transit, delivered, failed, cancelled
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    # pending, preparing, in_transit, delivered, partial, failed, cancelled
     fee: Mapped[int] = mapped_column(Integer, default=0)
+    prepared_qty: Mapped[int] = mapped_column(Integer, default=0)   # unités de base
+    delivered_qty: Mapped[int] = mapped_column(Integer, default=0)  # unités de base
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime)
+    failure_reason: Mapped[str | None] = mapped_column(Text)
+    collected_amount: Mapped[int] = mapped_column(Integer, default=0)
+    payment_method: Mapped[str | None] = mapped_column(String(40))
     proof_comment: Mapped[str | None] = mapped_column(Text)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
 
     lines: Mapped[list["DeliveryLine"]] = relationship(back_populates="delivery", lazy="selectin")
+    order: Mapped["CustomerOrder | None"] = relationship(back_populates="deliveries",
+                                                         lazy="joined")
+    customer: Mapped["Customer"] = relationship(lazy="joined")
 
 
 class DeliveryLine(Base):
     __tablename__ = "delivery_lines"
     id: Mapped[int] = mapped_column(primary_key=True)
     delivery_id: Mapped[int] = mapped_column(ForeignKey("deliveries.id"), index=True)
+    order_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customer_order_lines.id"))
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
+    packaging_id: Mapped[int | None] = mapped_column(
+        ForeignKey("product_packagings.id"))
+    designation: Mapped[str] = mapped_column(String(200), default="")
+    unit_label: Mapped[str] = mapped_column(String(60), default="Unité")
+    quantity_display: Mapped[int] = mapped_column(Integer, default=1)
+    unit_price: Mapped[int] = mapped_column(Integer, default=0)
     prepared_qty: Mapped[int] = mapped_column(Integer, default=0)   # unités de base
     delivered_qty: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -103,6 +135,11 @@ class CashMovement(Base):
     document_id: Mapped[int | None] = mapped_column(Integer)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     comment: Mapped[str | None] = mapped_column(Text)
+    # une correction sur session clôturée référence la clôture corrigée (§5.12)
+    corrects_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cash_sessions.id"), index=True)
+    corrected_at: Mapped[datetime | None] = mapped_column(DateTime)
+    correction_reason: Mapped[str | None] = mapped_column(Text)
 
 
 class ExpenseCategory(Base):
@@ -124,6 +161,9 @@ class Expense(Base):
     comment: Mapped[str | None] = mapped_column(Text)
     session_id: Mapped[int | None] = mapped_column(ForeignKey("cash_sessions.id"))
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    # une dépense annulée n'est jamais supprimée (§4.6)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime)
+    cancel_reason: Mapped[str | None] = mapped_column(Text)
 
 
 class BackupHistory(Base):

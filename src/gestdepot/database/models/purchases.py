@@ -1,10 +1,11 @@
 """Fournisseurs, achats, réceptions, factures, paiements (§6.6)."""
 from datetime import datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+from .catalog import Product  # noqa: F401  (annotation de relation)
 
 
 class Supplier(Base):
@@ -30,11 +31,15 @@ class PurchaseOrder(Base):
     expected_date: Mapped[Date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(20), default="draft")
     # draft, confirmed, partially_received, received, cancelled — ne touche jamais le stock (§5.11)
-    total_amount: Mapped[int] = mapped_column(Integer, default=0)
+    total_amount: Mapped[int] = mapped_column(Integer, default=0)   # net + frais
+    discount_amount: Mapped[int] = mapped_column(Integer, default=0)  # remise négociée
+    freight_fees: Mapped[int] = mapped_column(Integer, default=0)     # transport
+    other_fees: Mapped[int] = mapped_column(Integer, default=0)       # frais divers
     comment: Mapped[str | None] = mapped_column(Text)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
 
     lines: Mapped[list["PurchaseOrderLine"]] = relationship(back_populates="order", lazy="selectin")
+    supplier: Mapped["Supplier"] = relationship(lazy="joined")
 
 
 class PurchaseOrderLine(Base):
@@ -47,10 +52,11 @@ class PurchaseOrderLine(Base):
     quantity: Mapped[int] = mapped_column(Integer)        # en unités de base
     quantity_display: Mapped[int] = mapped_column(Integer, default=1)
     unit_cost: Mapped[int] = mapped_column(Integer)       # prix convenu, XOF
+    landed_cost: Mapped[int] = mapped_column(Integer, default=0)  # convenu + frais
     received_qty: Mapped[int] = mapped_column(Integer, default=0)
 
     order: Mapped["PurchaseOrder"] = relationship(back_populates="lines")
-    product: Mapped["Product"] = relationship()
+    product: Mapped["Product"] = relationship(lazy="joined")
 
 
 class GoodsReceipt(Base):
@@ -107,3 +113,6 @@ class SupplierPayment(Base):
     cash_session_id: Mapped[int | None] = mapped_column(ForeignKey("cash_sessions.id"))
     invoice_id: Mapped[int | None] = mapped_column(ForeignKey("supplier_invoices.id"))
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    comment: Mapped[str | None] = mapped_column(Text)
+
+    supplier: Mapped["Supplier"] = relationship(lazy="joined")

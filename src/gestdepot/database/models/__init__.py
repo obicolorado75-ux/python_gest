@@ -1,17 +1,53 @@
 """Import central de tous les modèles + création du schéma."""
 from .base import Base
-from .security import Role, Permission, RolePermission, User, AuditLog, CompanySettings, AppSetting
-from .catalog import (Category, Brand, Unit, Product, ProductBarcode, ProductPackaging,
-                      PriceList, ProductPrice, ProductCostHistory)
-from .stock import StockMovement, StockBalance, InventorySession, InventoryLine, ProductBatch
-from .packaging import ReturnablePackaging, DepositMovement
-from .sales import (Customer, Sale, SaleLine, SaleReturn, SaleReturnLine,
-                    CustomerPayment, PaymentAllocation, CustomerCreditEvent)
-from .purchases import (Supplier, PurchaseOrder, PurchaseOrderLine, GoodsReceipt,
-                        GoodsReceiptLine, SupplierInvoice, SupplierPayment)
-from .finance import (CustomerOrder, CustomerOrderLine, Delivery, DeliveryLine, CashSession,
-                      CashMovement, ExpenseCategory, Expense, BackupHistory,
-                      DocumentSequence, GeneratedDocument)
+from .catalog import (
+                      Brand,
+                      Category,
+                      PriceList,
+                      Product,
+                      ProductBarcode,
+                      ProductCostHistory,
+                      ProductPackaging,
+                      ProductPrice,
+                      Unit,
+)
+from .finance import (
+                      BackupHistory,
+                      CashMovement,
+                      CashSession,
+                      CustomerOrder,
+                      CustomerOrderLine,
+                      Delivery,
+                      DeliveryLine,
+                      DocumentSequence,
+                      Expense,
+                      ExpenseCategory,
+                      GeneratedDocument,
+)
+from .packaging import DepositMovement, ReturnablePackaging
+from .purchases import (
+                      GoodsReceipt,
+                      GoodsReceiptLine,
+                      PurchaseOrder,
+                      PurchaseOrderLine,
+                      Supplier,
+                      SupplierInvoice,
+                      SupplierPayment,
+)
+from .sales import (
+                      Customer,
+                      CustomerCreditEvent,
+                      CustomerPayment,
+                      HeldSale,
+                      PaymentAllocation,
+                      Sale,
+                      SaleLine,
+                      SalePayment,
+                      SaleReturn,
+                      SaleReturnLine,
+)
+from .security import AppSetting, AuditLog, CompanySettings, Permission, Role, RolePermission, User
+from .stock import InventoryLine, InventorySession, ProductBatch, StockBalance, StockMovement
 
 __all__ = ["Base",
            "Role", "Permission", "RolePermission", "User", "AuditLog", "CompanySettings", "AppSetting",
@@ -21,6 +57,7 @@ __all__ = ["Base",
            "ReturnablePackaging", "DepositMovement",
            "Customer", "Sale", "SaleLine", "SaleReturn", "SaleReturnLine",
            "CustomerPayment", "PaymentAllocation", "CustomerCreditEvent",
+           "SalePayment", "HeldSale",
            "Supplier", "PurchaseOrder", "PurchaseOrderLine", "GoodsReceipt", "GoodsReceiptLine",
            "SupplierInvoice", "SupplierPayment",
            "CustomerOrder", "CustomerOrderLine", "Delivery", "DeliveryLine", "CashSession",

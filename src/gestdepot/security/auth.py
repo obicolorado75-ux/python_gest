@@ -1,15 +1,26 @@
 """Sécurité : hachage Argon2id, permissions, journal d'audit (§3)."""
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from sqlalchemy import select
 
-from ..database.models import AuditLog, Role, User
+from ..database.models import AuditLog, Permission, Role, RolePermission, User
 from ..database.session import session_scope
 
 _ph = PasswordHasher()  # Argon2id par défaut
 
+# Limitation progressive des tentatives (§5.3) : mémoire de processus.
+MAX_ATTEMPTS = 5
+LOCK_SECONDS = 60
+_failed: dict[str, tuple[int, datetime]] = {}
+
 
 def hash_password(plain: str) -> str:
+    if not plain:
+        raise ValueError("Mot de passe vide interdit.")
     return _ph.hash(plain)
 
 
@@ -17,7 +28,7 @@ def verify_password(plain: str, hashed: str) -> bool:
     try:
         _ph.verify(hashed, plain)
         return True
-    except (VerifyMismatchError, ValueError):
+    except (VerifyMismatchError, VerificationError, InvalidHashError, ValueError):
         return False
 
 
@@ -27,6 +38,7 @@ class AuthError(Exception):
 
 class Session:
     """Session applicative courante : utilisateur connecté et ses permissions."""
+
     _current: "Session | None" = None
 
     def __init__(self, user: User, permissions: set[str]):
@@ -34,9 +46,7 @@ class Session:
         self.permissions = permissions
 
     def has_permission(self, code: str) -> bool:
-        if "*" in self.permissions:
-            return True
-        return code in self.permissions
+        return "*" in self.permissions or code in self.permissions
 
     def require(self, code: str) -> None:
         if not self.has_permission(code):
@@ -51,29 +61,109 @@ class Session:
         cls._current = None
 
 
+def _role_permissions(session, role: Role) -> set[str]:
+    if role.name == "Administrateur":
+        return {"*"}
+    codes = session.scalars(
+        select(Permission.code)
+        .join(RolePermission, RolePermission.permission_id == Permission.id)
+        .where(RolePermission.role_id == role.id)).all()
+    return set(codes)
+
+
 def login(username: str, password: str) -> Session:
     """Message neutre en cas d'identifiants incorrects (§5.3)."""
+    key = username.strip().lower()
+    attempts, last = _failed.get(key, (0, datetime.min))
+    if attempts >= MAX_ATTEMPTS and datetime.now() - last < timedelta(seconds=LOCK_SECONDS):
+        raise AuthError("Trop de tentatives. Réessayez dans un instant.")
+
     with session_scope() as s:
         user = s.scalar(select(User).where(User.username == username))
         if user is None or not user.active or not verify_password(password, user.password_hash):
-            s.add(AuditLog(action="login_failed", comment=username))
+            # la tentative échouée doit rester tracée : la transaction courante
+            # est annulée par l'exception, on journalise donc séparément (§5.3)
+            s.add(AuditLog(action="login_failed",
+                           object_id=user.id if user else None, comment=username))
+            s.commit()
+            _failed[key] = (attempts + 1, datetime.now())
             raise AuthError("Identifiant ou mot de passe incorrect.")
-        perms = set()
-        role = s.scalar(select(Role).where(Role.id == user.role_id))
-        if role and role.name == "Administrateur":
-            perms.add("*")
+        role = s.get(Role, user.role_id)
+        perms = _role_permissions(s, role) if role else set()
         s.add(AuditLog(action="login_ok", actor_id=user.id))
+        sess = Session(user, perms)
+    _failed.pop(key, None)
+    Session._current = sess
+    return sess
+
+
+def login_pin(user_id: int, pin: str) -> Session:
+    """Déverrouillage rapide d'un poste de caisse par code PIN (§3).
+
+    Même limitation progressive que la connexion par mot de passe : après
+    MAX_ATTEMPTS codes faux, le déverrouillage est suspendu LOCK_SECONDS.
+    """
+    key = f"pin:{user_id}"
+    attempts, last = _failed.get(key, (0, datetime.min))
+    if attempts >= MAX_ATTEMPTS and datetime.now() - last < timedelta(seconds=LOCK_SECONDS):
+        raise AuthError("Trop de tentatives. Réessayez dans un instant.")
+    with session_scope() as s:
+        user = s.get(User, user_id)
+        if user is None or not user.active or not user.pin_hash:
+            raise AuthError("Code PIN indisponible pour cet utilisateur.")
+        if not verify_password(pin, user.pin_hash):
+            s.add(AuditLog(action="pin_failed", actor_id=user_id))
+            s.commit()
+            _failed[key] = (attempts + 1, datetime.now())
+            raise AuthError("Code PIN incorrect.")
+        _failed.pop(key, None)
+        role = s.get(Role, user.role_id)
+        perms = _role_permissions(s, role) if role else set()
+        s.add(AuditLog(action="login_ok", actor_id=user.id, comment="pin"))
         sess = Session(user, perms)
     Session._current = sess
     return sess
 
 
+def verify_current_password(password: str) -> bool:
+    """Re-authentification de l'utilisateur connecté (§8.3 : action sensible).
+
+    Ne crée pas de nouvelle session et ne touche pas au compteur de tentatives :
+    l'objectif est de confirmer la présence d'un administrateur devant l'écran.
+    """
+    cur = Session.current()
+    if cur is None:
+        return False
+    with session_scope() as s:
+        user = s.get(User, cur.user.id)
+        if user is None or not user.active:
+            return False
+        ok = verify_password(password, user.password_hash)
+        s.add(AuditLog(action="reauth_ok" if ok else "reauth_failed",
+                       actor_id=user.id))
+    return ok
+
+
+def require_admin_password(password: str) -> None:
+    """Exige mot de passe correct + permission d'administration."""
+    cur = Session.current()
+    if cur is None:
+        raise AuthError("Connectez-vous pour continuer.")
+    if not verify_current_password(password):
+        raise AuthError("Mot de passe incorrect : opération refusée.")
+    if not (cur.has_permission("restore.run") or cur.has_permission("settings.manage")):
+        raise AuthError("Action réservée aux administrateurs.")
+
+
 def log(action: str, object_type: str | None = None, object_id: int | None = None,
         old_value: str | None = None, new_value: str | None = None,
         comment: str | None = None, session=None) -> None:
-    """Journalise l'action. Si `session` (Session ORM) est fournie, l'entrée
-    d'audit fait partie de la même transaction métier (évite les verrous SQLite) ;
-    sinon une transaction dédiée est ouverte."""
+    """Journalise l'action.
+
+    Si ``session`` (Session ORM) est fournie, l'entrée d'audit fait partie de la
+    même transaction métier (cohérence + évite les verrous SQLite) ; sinon une
+    transaction dédiée est ouverte.
+    """
     cur = Session.current()
     entry = AuditLog(
         actor_id=cur.user.id if cur else None,

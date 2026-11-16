@@ -40,7 +40,9 @@ class User(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)  # désactivation, pas suppression (§3)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
-    role: Mapped["Role"] = relationship()
+    # chargé en même temps que l'utilisateur : les services renvoient des
+    # objets détachés à l'interface après validation de la transaction.
+    role: Mapped["Role"] = relationship(lazy="joined")
 
 
 class AuditLog(Base):

@@ -36,4 +36,4 @@ class DepositMovement(Base):
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     comment: Mapped[str | None] = mapped_column(Text)
 
-    packaging: Mapped["ReturnablePackaging"] = relationship()
+    packaging: Mapped["ReturnablePackaging"] = relationship(lazy="joined")

@@ -1,7 +1,7 @@
 """Catalogue : catégories, marques, unités, produits, conditionnements, tarifs (§6.2)."""
 from datetime import date
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
