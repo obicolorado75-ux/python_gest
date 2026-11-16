@@ -410,3 +410,50 @@ class TestInventaireEcran:
         page.validate()                 # bloqué : message, pas de validation
         assert inventory.get_session(session.id).status != "validated"
         assert page.table.value(0, 6) == "À contrôler"
+
+
+class TestParametresSauvegarde:
+    """§5.16 / §8 : politique de sauvegarde pilotable depuis les paramètres."""
+
+    def test_onglet_sauvegarde_affiche_la_politique(self, window,
+                                                    backup_dir_setting):
+        window._select("settings")
+        page = window.pages["settings"]
+        page.refresh()
+        assert page.keep_daily.value() == 7
+        assert page.keep_weekly.value() == 4
+        assert page.auto_close.isChecked() is True
+        assert page.backups_table.columnCount() == 5
+        assert "Dernière sauvegarde" in page.last_backup_label.text()
+
+    def test_enregistrer_la_politique(self, window, backup_dir_setting):
+        window._select("settings")
+        page = window.pages["settings"]
+        page.refresh()
+        page.keep_daily.setValue(15)
+        page.keep_weekly.setValue(6)
+        page.auto_close.setChecked(False)
+        page.save_backup_policy()
+        settings = window.services["backup"].settings()
+        assert settings["backup.keep_daily"] == "15"
+        assert settings["backup.keep_weekly"] == "6"
+        assert settings["backup.auto_close"] == "0"
+
+    def test_sauvegarde_manuelle_listee(self, window, backup_dir_setting):
+        window._select("settings")
+        page = window.pages["settings"]
+        page.backup_now()
+        page.refresh()
+        assert page.backups_table.rowCount() == 1
+        assert page.backups_table.value(0, 4) == "OK"
+
+
+@pytest.fixture()
+def backup_dir_setting(window, tmp_path):
+    """Redirige les sauvegardes vers un dossier de test."""
+    directory = tmp_path / "backups"
+    directory.mkdir()
+    window.services["backup"].save_settings(directory=str(directory),
+                                            keep_daily=7, keep_weekly=4,
+                                            auto_close=True)
+    return directory

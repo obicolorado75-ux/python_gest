@@ -24,7 +24,7 @@ consulter ou imprimer.
 | Clients | Fiche, plafond de crédit, relevé de compte, règlements partiels (le CA n'est pas recalculé) |
 | Caisse | Ouverture, retraits/apports, dépenses datées et annulables, catégories, clôture avec écart conservé, corrections auditées des sessions clôturées ; espèces séparées du Mobile Money |
 | Rapports | Tableau de bord, marges, exports **Excel** (openpyxl) et **PDF** (ReportLab), ticket 80 mm |
-| Sauvegarde | Copie cohérente via l'API SQLite, contrôle `PRAGMA integrity_check`, empreinte SHA-256, restauration protégée |
+| Sauvegarde | Copie cohérente via l'API SQLite, contrôle `PRAGMA integrity_check`, empreinte SHA-256, dossier et rétention configurables (quotidienne + hebdomadaire), sauvegarde à la fermeture, restauration protégée |
 
 ## Aperçu
 

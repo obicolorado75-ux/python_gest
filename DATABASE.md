@@ -99,6 +99,12 @@ Base : **SQLite** locale, fichier unique dans le répertoire de données utilisa
 ### Sauvegardes et documents
 `backup_history`, `document_sequences`, `generated_documents`.
 
+- `backup_history` enregistre chemin, taille, empreinte SHA-256, résultat et
+  message d'erreur éventuel.
+- ⚠️ `backup_history` vit **dans** la base sauvegardée : l'historique d'une
+  sauvegarde n'apparaît dans la base restaurée que parce que la copie de sécurité
+  prise avant restauration y est volontairement réenregistrée (§8.3).
+
 ## Index
 
 Index sur les références et codes uniques (`products.reference`,

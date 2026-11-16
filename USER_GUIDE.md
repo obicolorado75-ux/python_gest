@@ -217,6 +217,33 @@ et les coordonnées du dépôt.
 | F9 | Valider la vente |
 | Échap | Vider le panier / fermer |
 
+## 11 bis. Sauvegardes et restauration
+
+![Sauvegarde](docs/captures/settings_backup.png)
+
+Onglet **Sauvegarde** des paramètres :
+
+1. **Dossier de sauvegarde** : laissez vide pour le dossier par défaut, ou
+   **Choisir…** pour un disque externe / une clé USB (support distinct
+   recommandé, §8.2).
+2. **Rétention** : nombre de sauvegardes **quotidiennes** (7 par défaut) et
+   **hebdomadaires** (4 par défaut) conservées. Au-delà, les plus anciennes sont
+   purgées; une archive par semaine reste disponible au-delà de la fenêtre
+   quotidienne.
+3. **Sauvegarder à la fermeture** : activé par défaut ; décochez si la
+   sauvegarde de fermeture ralentit votre poste.
+4. **Sauvegarder maintenant** : copie cohérente via l'API SQLite, contrôle
+   `PRAGMA integrity_check`, empreinte SHA-256 enregistrée avec la date et la
+   taille. La sauvegarde automatique quotidienne se déclenche au premier
+   démarrage de la journée.
+5. **Vérifier une sauvegarde** : recontrôle l'intégrité d'un fichier existant.
+6. **Restaurer une sauvegarde** : réservé aux administrateurs. Une copie de
+   sécurité de la base actuelle est créée avant tout remplacement ; une
+   sauvegarde invalide est toujours refusée. Redémarrez ensuite l'application.
+
+Limite expliquée à l'écran : l'application étant hors ligne, aucune sauvegarde
+automatique ne peut s'exécuter si le poste est éteint ou l'application fermée.
+
 ## 12. En cas de problème
 
 - **Message « Permission refusée »** : votre rôle ne permet pas cette action ;

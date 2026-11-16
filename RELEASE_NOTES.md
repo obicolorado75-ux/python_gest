@@ -10,8 +10,32 @@
 | 3 — Caisse et ventes | ✅ P0 livré | POS, panier, tarifs, remises, paiements mixtes, crédit, retours, annulations, ventes suspendues (F8), ticket |
 | 4 — Clients, livraisons, finances | 🟡 partiel | clients, crédits, relevés, paiements affectés, sessions de caisse, dépenses ; livraisons et commandes clients à faire (P1) |
 | 5 — Inventaires, analyses, rapports | 🟡 P0 livré | inventaires guidés, tableau de bord, marges, exports Excel/PDF ; rapports spécialisés à compléter |
-| 6 — Sécurité, sauvegarde | 🟡 partiel | audit, permissions, sauvegarde/restauration vérifiées ; permissions fines par action et tests de régression à étendre |
+| 6 — Sécurité, sauvegarde | ✅ P0 livré | audit, permissions vérifiées dans la couche métier, sauvegarde/restauration vérifiées avec politique (dossier, rétention) et écran dédié |
 | 7 — Packaging | ⬜ à faire | scripts de construction fournis, installateurs à produire sur Windows/macOS |
+
+## v0.1.5 — politique de sauvegarde pilotable (16 novembre 2026)
+
+### Ajouté
+
+- **Réglages de sauvegarde persistés** (`app_settings`) : dossier de
+  destination (disque externe possible), rétention **quotidienne** et
+  **hebdomadaire**, sauvegarde à la fermeture activable/désactivable
+  (`BackupService.settings / save_settings`).
+- **Rétention** : `purge_old` conserve les N sauvegardes récentes **et** une
+  archive par semaine au-delà de cette fenêtre (tri par date de fichier, plus
+  de purge liée au nom des fichiers).
+- **Écran Paramètres** : dossier avec sélecteur, rétention, case de sauvegarde à
+  la fermeture, bouton « Vérifier une sauvegarde », empreinte SHA-256 dans
+  l'historique, rappel de la dernière sauvegarde réussie et mention explicite de
+  la limite hors ligne (§8.1).
+- **Restauration** : la sauvegarde de sécurité créée avant restauration est
+  réenregistrée dans l'historique de la base restaurée — l'opérateur retrouve
+  toujours de quoi revenir en arrière.
+
+### Corrigé
+
+- Après une restauration, la base restaurée ne connaissait pas la copie de
+  sécurité prise juste avant l'opération.
 
 ## v0.1.4 — inventaires contrôlés (16 novembre 2026)
 
@@ -132,7 +156,7 @@
 - **Rapports** : tableau de bord, marges, exports Excel et PDF.
 - **Sauvegarde** : copie cohérente via l'API SQLite, contrôle d'intégrité,
   empreinte SHA-256, restauration protégée par authentification et vérification.
-- **Tests** : 169 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
+- **Tests** : 187 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
   retours, achats/consignes, migrations et mise à niveau automatique, atomicité,
   schéma, exports, tickets, interface).
 

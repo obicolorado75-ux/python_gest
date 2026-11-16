@@ -236,8 +236,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802 (API Qt)
         try:
-            if auth.Session.current() is not None:
-                # sauvegarde à la fermeture propre (§8.1)
+            if auth.Session.current() is not None and \
+                    self.services["backup"].should_backup_on_close():
+                # sauvegarde à la fermeture propre (§8.1), désactivable
                 self.services["backup"].backup(label="fermeture")
         except Exception:  # pragma: no cover
             pass

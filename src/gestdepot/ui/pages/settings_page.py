@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -10,6 +11,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPushButton,
+    QSpinBox,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -92,11 +95,17 @@ class SettingsPage(Page):
         currency.setStyleSheet("color: #5f6b7a;")
         layout.addWidget(currency)
         save = QHBoxLayout()
-        from PySide6.QtWidgets import QPushButton
         save.addWidget(QPushButton("Enregistrer les paramètres",
                                    clicked=self.save_company))
         save.addStretch(1)
         layout.addLayout(save)
+        offline = QLabel(
+            "Mode hors ligne : GestDepot fonctionne sans Internet. Les données "
+            "restent sur ce poste — pensez à copier régulièrement les "
+            "sauvegardes sur un support distinct (clé USB, disque externe).")
+        offline.setWordWrap(True)
+        offline.setStyleSheet("color: #5f6b7a;")
+        layout.addWidget(offline)
         layout.addStretch(1)
         self.tabs.addTab(tab, "Dépôt")
 
@@ -117,7 +126,6 @@ class SettingsPage(Page):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         actions = QHBoxLayout()
-        from PySide6.QtWidgets import QPushButton
         actions.addWidget(QPushButton("Nouvel utilisateur", clicked=self.new_user))
         actions.addWidget(QPushButton("Réinitialiser le mot de passe",
                                       clicked=self.reset_password))
@@ -133,20 +141,56 @@ class SettingsPage(Page):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         actions = QHBoxLayout()
-        from PySide6.QtWidgets import QPushButton
         actions.addWidget(QPushButton("Sauvegarder maintenant",
                                       clicked=self.backup_now))
         actions.addWidget(QPushButton("Restaurer une sauvegarde",
                                       clicked=self.restore))
+        actions.addWidget(QPushButton("Vérifier une sauvegarde",
+                                      clicked=self.verify_backup))
         actions.addStretch(1)
         layout.addLayout(actions)
+
+        policy = QFormLayout()
+        self.backup_dir = QLineEdit()
+        self.backup_dir.setPlaceholderText("Dossier par défaut (ou disque externe)")
+        self.keep_daily = QSpinBox()
+        self.keep_daily.setRange(1, 365)
+        self.keep_weekly = QSpinBox()
+        self.keep_weekly.setRange(0, 104)
+        self.auto_close = QCheckBox("Sauvegarder à la fermeture de l'application")
+        self.auto_close.setChecked(True)
+        policy_row = QHBoxLayout()
+        policy_row.addWidget(self.backup_dir, 1)
+        policy_row.addWidget(QPushButton("Choisir…", clicked=self.choose_backup_dir))
+        policy_widget = QWidget()
+        policy_widget.setLayout(policy_row)
+        policy_row.setContentsMargins(0, 0, 0, 0)
+        policy.addRow("Dossier de sauvegarde", policy_widget)
+        retention = QHBoxLayout()
+        retention.addWidget(QLabel("Quotidiennes :"))
+        retention.addWidget(self.keep_daily)
+        retention.addWidget(QLabel("Hebdomadaires :"))
+        retention.addWidget(self.keep_weekly)
+        retention.addStretch(1)
+        retention_widget = QWidget()
+        retention_widget.setLayout(retention)
+        retention.setContentsMargins(0, 0, 0, 0)
+        policy.addRow("Rétention", retention_widget)
+        policy.addRow("", self.auto_close)
+        layout.addLayout(policy)
+        layout.addWidget(QPushButton("Enregistrer la politique de sauvegarde",
+                                     clicked=self.save_backup_policy))
         note = QLabel("La sauvegarde utilise l'API SQLite et vérifie l'intégrité de "
                       "la copie. Aucune sauvegarde automatique ne peut s'exécuter "
                       "lorsque l'application est fermée.")
         note.setWordWrap(True)
         note.setStyleSheet("color: #5f6b7a;")
         layout.addWidget(note)
-        self.backups_table = DataTable(["Date", "Fichier", "Taille", "Résultat"])
+        self.last_backup_label = QLabel("")
+        self.last_backup_label.setStyleSheet("font-weight: 600;")
+        layout.addWidget(self.last_backup_label)
+        self.backups_table = DataTable(["Date", "Fichier", "Taille", "Empreinte",
+                                        "Résultat"])
         layout.addWidget(self.backups_table, 1)
         self.tabs.addTab(tab, "Sauvegarde")
 
@@ -176,14 +220,31 @@ class SettingsPage(Page):
                                           "Désactivé": "#B3261E"}})
 
         try:
+            policy = self.services["backup"].settings()
+            self.backup_dir.setText(policy.get("backup.directory", ""))
+            self.keep_daily.setValue(int(policy.get("backup.keep_daily", "7")))
+            self.keep_weekly.setValue(int(policy.get("backup.keep_weekly", "4")))
+            self.auto_close.setChecked(policy.get("backup.auto_close", "1") == "1")
+        except Exception:
+            pass
+        try:
+            last = self.services["backup"].last_successful()
+        except Exception:
+            last = None
+        self.last_backup_label.setText(
+            "Dernière sauvegarde réussie : "
+            + (last.at.strftime("%d/%m/%Y %H:%M") if last else "aucune"))
+
+        try:
             backups = self.services["backup"].history(limit=40)
         except Exception:
             backups = []
         self.backups_table.load([
             [b.at.strftime("%d/%m/%Y %H:%M"), b.path.split("/")[-1].split("\\")[-1],
              f"{b.size_bytes / 1024:.0f} Ko",
+             (b.checksum or "")[:12],
              "OK" if b.success else "Échec"] for b in backups],
-            colors={3: {"OK": "#1B7F3B", "Échec": "#B3261E"}})
+            colors={4: {"OK": "#1B7F3B", "Échec": "#B3261E"}})
 
         session = auth.Session.current()
         if session and session.has_permission("audit.view"):
@@ -236,6 +297,48 @@ class SettingsPage(Page):
                              "Son historique reste consultable."):
             return
         self.services["admin"].deactivate_user(user.id)
+        return True
+
+    def choose_backup_dir(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+        directory = QFileDialog.getExistingDirectory(
+            self, "Dossier des sauvegardes", self.backup_dir.text() or "")
+        if directory:
+            self.backup_dir.setText(directory)
+
+    @refresh_after
+    def save_backup_policy(self):
+        self.services["backup"].save_settings(
+            directory=self.backup_dir.text().strip(),
+            keep_daily=self.keep_daily.value(),
+            keep_weekly=self.keep_weekly.value(),
+            auto_close=self.auto_close.isChecked())
+        removed = self.services["backup"].purge_old()
+        message = "Politique de sauvegarde enregistrée."
+        if removed:
+            message += f"\n{removed} ancienne(s) sauvegarde(s) purgée(s)."
+        info(self, message, "Sauvegarde")
+        return True
+
+    @refresh_after
+    def verify_backup(self):
+        candidates = self.services["backup"].list_restore_candidates()
+        if not candidates:
+            QMessageBox.information(self, "Sauvegarde",
+                                    "Aucune sauvegarde à vérifier.")
+            return
+        from PySide6.QtWidgets import QInputDialog
+        labels = [f"{item['name']} — "
+                  f"{'valide' if item['valid'] else 'INVALIDE'}"
+                  for item in candidates]
+        choice, ok = QInputDialog.getItem(self, "Vérifier une sauvegarde",
+                                          "Fichier :", labels, 0, False)
+        if not ok:
+            return
+        item = candidates[labels.index(choice)]
+        self.services["backup"].verify(item["path"])
+        info(self, f"Sauvegarde vérifiée (integrity_check OK) :\n{item['name']}",
+             "Sauvegarde")
         return True
 
     @refresh_after
