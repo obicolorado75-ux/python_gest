@@ -6,32 +6,23 @@ de gauche. L'application fonctionne sans Internet : l'indicateur
 
 ## 1. Se connecter
 
-![Connexion](docs/captures/login.png)
+![Écran de connexion](docs/captures/login.png)
 
 1. Lancez GestDepot.
 2. Au premier démarrage, l'assistant demande : nom du dépôt, identifiant,
    mot de passe (6 caractères minimum) et éventuellement un code PIN de caisse.
-3. Saisissez ensuite votre identifiant et votre mot de passe. Un message neutre
-   s'affiche en cas d'erreur ; après plusieurs échecs, la connexion est
-   temporairement bloquée.
-
-## 1 bis. Se connecter
-
-![Écran de connexion](docs/captures/login.png)
-
-L'écran affiche le logo du dépôt (onglet Dépôt des paramètres), son nom, le champ
-identifiant et un champ **mot de passe / PIN** :
-
-- **Profil de caisse avec code PIN** : saisissez votre identifiant puis votre
-  code à 4–8 chiffres ; le PIN remplace le mot de passe pour aller plus vite.
-- **Administrateur ou responsable** : mot de passe complet.
-- La mention « Mode hors ligne » rappelle qu'aucune connexion Internet n'est
-  nécessaire.
-- En cas d'erreur, le message reste neutre (« Identifiant ou mot de passe
-  incorrect ») et ne dit jamais lequel des deux est faux. Après 5 tentatives,
-  la connexion est bloquée une minute.
-- Chaque connexion, échec et déverrouillage par PIN est journalisé (onglet
-  Journal d'audit).
+3. L'écran de connexion affiche le logo du dépôt (onglet Dépôt des paramètres)
+   et son nom, puis deux champs : **Identifiant** et **Mot de passe / PIN**.
+   - **Profil de caisse avec code PIN** : saisissez votre identifiant puis votre
+     code à 4–8 chiffres ; le PIN remplace le mot de passe pour aller plus vite
+     (les 5 échecs consécutifs bloquent une minute).
+   - **Administrateur ou responsable** : mot de passe complet.
+4. La mention « Mode hors ligne » rappelle qu'aucune connexion Internet n'est
+   nécessaire.
+5. En cas d'erreur, le message reste neutre (« Identifiant ou mot de passe
+   incorrect ») et ne dit jamais lequel des deux est faux. Après plusieurs
+   échecs, la connexion est temporairement bloquée ; chaque tentative est
+   journalisée dans l'onglet Journal d'audit.
 
 ## 2. Tableau de bord
 
