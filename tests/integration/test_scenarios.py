@@ -490,7 +490,8 @@ class TestSauvegarde:
         # on modifie la base puis on restaure
         stock.adjust(product.id, 8, "mouvement_initial")
         assert stock.available(product.id) == 50
-        backup.restore(record.path)
+        # §8.3 : la restauration exige la ressaisie du mot de passe admin
+        backup.restore(record.path, password="secret")
         from gestdepot.security import auth
         auth.login("admin", "secret")
         assert stock.available(product.id) == 42

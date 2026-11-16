@@ -192,15 +192,23 @@ class BackupService:
             raise BackupError("Sauvegarde vide : aucune table.")
         return True
 
-    def restore(self, backup_path: str) -> str:
+    def restore(self, backup_path: str, password: str | None = None) -> str:
         """Restauration contrôlée (§8.3).
 
-        1. authentification administrateur (permission restore.run)
+        1. authentification administrateur : permission `restore.run` **et**
+           mot de passe ressaisi (`password`) — une session laissée ouverte sur
+           un poste de caisse ne suffit pas
         2. vérification d'intégrité de la sauvegarde choisie
         3. sauvegarde de sécurité de la base actuelle
         4. fermeture des connexions puis restauration contrôlée
         """
         common.require("restore.run")
+        if auth.Session.current() is not None:
+            if not password:
+                raise BackupError(
+                    "Restauration refusée : le mot de passe de "
+                    "l'administrateur doit être ressaisi.")
+            auth.require_admin_password(password)
         self.verify(backup_path)
         live_path = self._live_path()
         # sauvegarde de sécurité avant écrasement

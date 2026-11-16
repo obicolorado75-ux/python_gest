@@ -15,8 +15,12 @@ def db(tmp_path):
         role = session.scalar(select(Role).where(Role.name == "Administrateur"))
         session.add(User(username="admin", password_hash=hash_password("secret"),
                          role_id=role.id, full_name="Admin Test"))
+    # la limitation progressive des tentatives vit en mémoire de processus :
+    # on la remet à zéro pour isoler les tests (§5.3).
+    auth._failed.clear()
     auth.Session.logout()
     yield engine
+    auth._failed.clear()
     auth.Session.logout()
 
 

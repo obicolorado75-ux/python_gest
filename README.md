@@ -25,6 +25,7 @@ consulter ou imprimer.
 | Caisse | Ouverture, retraits/apports, dépenses datées et annulables, catégories, clôture avec écart conservé, corrections auditées des sessions clôturées ; espèces séparées du Mobile Money |
 | Moyens de paiement | Espèces, Orange Money, MTN, Moov, Wave, virement, chèque et opérateurs libres — configurables dans les paramètres |
 | Rapports | Tableau de bord, marges, exports **Excel** (openpyxl) et **PDF** (ReportLab), ticket 80 mm |
+| Connexion | Logo et nom du dépôt, mot de passe ou PIN selon le profil, message neutre, limitation progressive, journalisation |
 | Sauvegarde | Copie cohérente via l'API SQLite, contrôle `PRAGMA integrity_check`, empreinte SHA-256, dossier et rétention configurables (quotidienne + hebdomadaire), sauvegarde à la fermeture, restauration protégée |
 
 ## Aperçu

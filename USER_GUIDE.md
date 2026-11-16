@@ -15,6 +15,24 @@ de gauche. L'application fonctionne sans Internet : l'indicateur
    s'affiche en cas d'erreur ; après plusieurs échecs, la connexion est
    temporairement bloquée.
 
+## 1 bis. Se connecter
+
+![Écran de connexion](docs/captures/login.png)
+
+L'écran affiche le logo du dépôt (onglet Dépôt des paramètres), son nom, le champ
+identifiant et un champ **mot de passe / PIN** :
+
+- **Profil de caisse avec code PIN** : saisissez votre identifiant puis votre
+  code à 4–8 chiffres ; le PIN remplace le mot de passe pour aller plus vite.
+- **Administrateur ou responsable** : mot de passe complet.
+- La mention « Mode hors ligne » rappelle qu'aucune connexion Internet n'est
+  nécessaire.
+- En cas d'erreur, le message reste neutre (« Identifiant ou mot de passe
+  incorrect ») et ne dit jamais lequel des deux est faux. Après 5 tentatives,
+  la connexion est bloquée une minute.
+- Chaque connexion, échec et déverrouillage par PIN est journalisé (onglet
+  Journal d'audit).
+
 ## 2. Tableau de bord
 
 ![Tableau de bord](docs/captures/dashboard.png)

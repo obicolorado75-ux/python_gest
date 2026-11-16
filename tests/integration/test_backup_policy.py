@@ -134,7 +134,7 @@ class TestRestauration:
                                                           backup_dir):
         backup.save_settings(directory=str(backup_dir))
         first = backup.backup(label="avant")
-        backup.restore(first.path)
+        backup.restore(first.path, password="secret")
         # la base restaurée connaît la copie de sécurité créée avant elle
         assert backup.last_successful() is not None
         assert any("pre_restore" in record.path for record in backup.history())
@@ -146,4 +146,45 @@ class TestRestauration:
         broken = tmp_path / "invalide.db"
         broken.write_bytes(b"pas une base")
         with pytest.raises(BackupError):
-            backup.restore(str(broken))
+            backup.restore(str(broken), password="secret")
+
+
+class TestAuthentificationRestauration:
+    """§8.3 : la restauration exige la ressaisie du mot de passe administrateur."""
+
+    def test_mot_de_passe_absent_refuse(self, backup, backup_dir):
+        backup.save_settings(directory=str(backup_dir))
+        record = backup.backup(label="avant")
+        with pytest.raises(BackupError):
+            backup.restore(record.path)
+
+    def test_mot_de_passe_incorrect_refuse(self, backup, backup_dir):
+        from gestdepot.security import AuthError
+        backup.save_settings(directory=str(backup_dir))
+        record = backup.backup(label="avant")
+        with pytest.raises(AuthError):
+            backup.restore(record.path, password="mauvais")
+
+    def test_utilisateur_sans_permission_refuse(self, backup, backup_dir):
+
+        from gestdepot.database.models import User
+        from gestdepot.database.session import session_scope
+        from gestdepot.security import auth, hash_password
+        backup.save_settings(directory=str(backup_dir))
+        record = backup.backup(label="avant")
+        caissier = next(role for role in _roles() if role.name == "Caissier")
+        with session_scope() as s:
+            s.add(User(username="caisse1", role_id=caissier.id,
+                       password_hash=hash_password("caisse1pass")))
+        auth.login("caisse1", "caisse1pass")
+        with pytest.raises(PermissionError):
+            backup.restore(record.path, password="caisse1pass")
+
+
+def _roles():
+    from sqlalchemy import select
+
+    from gestdepot.database.models import Role
+    from gestdepot.database.session import session_scope
+    with session_scope() as s:
+        return list(s.scalars(select(Role)))

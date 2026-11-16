@@ -16,6 +16,7 @@ except Exception as exc:  # pragma: no cover - dépend de l'environnement
     pytest.skip(f"PySide6 ne peut pas être chargé : {exc}", allow_module_level=True)
 
 from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtWidgets import QDialog, QLabel, QLineEdit  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -506,3 +507,61 @@ class TestMoyensDePaiementEcran:
         codes = [page.method_box.itemData(i)
                  for i in range(page.method_box.count())]
         assert "cheque" not in codes and "especes" in codes
+
+
+class TestEcranDeConnexion:
+    """§5.3 : logo, nom du dépôt, message neutre, mode hors ligne."""
+
+    def test_ecran_affiche_l_identite_et_le_mode_hors_ligne(self, qapp, tmp_path):
+        from sqlalchemy import select
+
+        from gestdepot.database.models import Role, User
+        from gestdepot.database.session import reset_for_tests, session_scope
+        from gestdepot.security import auth, hash_password
+        from gestdepot.ui.dialogs.login_dialog import LoginDialog
+
+        reset_for_tests(f"sqlite:///{tmp_path}/login.db")
+        with session_scope() as session:
+            role = session.scalar(select(Role).where(Role.name == "Administrateur"))
+            session.add(User(username="admin", role_id=role.id,
+                             password_hash=hash_password("secret"),
+                             full_name="Awa Koné"))
+        from gestdepot.services.admin_service import AdminService
+        auth.login("admin", "secret")
+        AdminService().update_company_settings(name="Dépôt Les Palmiers")
+        auth.Session.logout()
+
+        dialog = LoginDialog()
+        texts = [child.text() for child in dialog.findChildren(QLabel)
+                 if hasattr(child, "text")]
+        assert any("Dépôt Les Palmiers" in text for text in texts)
+        assert any("hors ligne" in text.lower() for text in texts)
+        assert dialog.pass_edit.echoMode() == QLineEdit.Password
+
+        # message neutre affiché dans le dialogue, pas de fuite d'information
+        dialog.user_edit.setText("admin")
+        dialog.pass_edit.setText("mauvais")
+        dialog._login()
+        assert "incorrect" in dialog.error.text()
+        assert dialog.result() != QDialog.Accepted
+
+    def test_connexion_reussie_ferme_le_dialogue(self, qapp, tmp_path):
+        from sqlalchemy import select
+
+        from gestdepot.database.models import Role, User
+        from gestdepot.database.session import reset_for_tests, session_scope
+        from gestdepot.security import auth, hash_password
+        from gestdepot.ui.dialogs.login_dialog import LoginDialog
+
+        auth._failed.clear()
+        reset_for_tests(f"sqlite:///{tmp_path}/login2.db")
+        with session_scope() as session:
+            role = session.scalar(select(Role).where(Role.name == "Administrateur"))
+            session.add(User(username="admin", role_id=role.id,
+                             password_hash=hash_password("secret")))
+        dialog = LoginDialog()
+        dialog.user_edit.setText("admin")
+        dialog.pass_edit.setText("secret")
+        dialog._login()
+        assert dialog.result() == QDialog.Accepted
+        assert dialog.username == "admin"

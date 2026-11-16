@@ -46,6 +46,23 @@
 - La validation métier (`sales`, `cash`, `deposits`, `purchases`) refuse un
   moyen inconnu ou désactivé.
 
+### Ajouté (connexion §5.3)
+
+- Écran de connexion : logo du dépôt (onglet Dépôt), nom, identifiant, champ
+  « mot de passe / PIN » avec bascule automatique pour les profils de caisse
+  disposant d'un PIN, mention hors ligne, message neutre.
+- Limitation progressive aussi appliquée au **PIN** (5 essais → 1 minute), et
+  les échecs de connexion sont désormais réellement écrits dans le journal
+  d'audit (la transaction était auparavant annulée par l'exception).
+- Paramètres → logo du dépôt modifiable (parcourir + affichage).
+
+### Ajouté (restauration §8.3)
+
+- **Ressaisie du mot de passe administrateur** exigée dans le service de
+  restauration (`restore(path, password=…)`) : une session laissée ouverte ne
+  suffit plus. Trois tests couvrent mot de passe absent, incorrect et rôle sans
+  permission.
+
 ### Corrigé
 
 - Après une restauration, la base restaurée ne connaissait pas la copie de
@@ -170,7 +187,7 @@
 - **Rapports** : tableau de bord, marges, exports Excel et PDF.
 - **Sauvegarde** : copie cohérente via l'API SQLite, contrôle d'intégrité,
   empreinte SHA-256, restauration protégée par authentification et vérification.
-- **Tests** : 203 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
+- **Tests** : 217 tests (scénarios T01–T18, paiements mixtes, ventes suspendues,
   retours, achats/consignes, migrations et mise à niveau automatique, atomicité,
   schéma, exports, tickets, interface).
 

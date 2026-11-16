@@ -88,10 +88,23 @@ class SettingsPage(Page):
         self.name_edit = QLineEdit()
         self.phone_edit = QLineEdit()
         self.address_edit = QLineEdit()
+        self.logo_label = QLabel("Aucun logo")
+        self.logo_label.setStyleSheet("color: #5f6b7a;")
+        self.logo_edit = QLineEdit()
+        self.logo_edit.setPlaceholderText("Chemin d'une image (PNG ou JPG)")
+        logo_row = QHBoxLayout()
+        logo_row.addWidget(self.logo_edit, 1)
+        logo_row.addWidget(QPushButton("Parcourir…", clicked=self.choose_logo))
+        logo_widget = QWidget()
+        logo_widget.setLayout(logo_row)
+        logo_row.setContentsMargins(0, 0, 0, 0)
+
         self.footer_edit = QLineEdit()
         form.addRow("Nom du dépôt", self.name_edit)
         form.addRow("Téléphone", self.phone_edit)
         form.addRow("Adresse", self.address_edit)
+        form.addRow("Logo (documents)", logo_widget)
+        form.addRow("", self.logo_label)
         form.addRow("Pied de page des documents", self.footer_edit)
         layout.addLayout(form)
         currency = QLabel("Devise : FCFA (XOF) — montants en nombres entiers, "
@@ -113,17 +126,27 @@ class SettingsPage(Page):
         layout.addStretch(1)
         self.tabs.addTab(tab, "Dépôt")
 
+    def choose_logo(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Logo du dépôt", "", "Images (*.png *.jpg *.jpeg)")
+        if path:
+            self.logo_edit.setText(path)
+            self.logo_label.setText(path)
+
     def save_company(self) -> None:
         try:
             self.services["admin"].update_company_settings(
                 name=self.name_edit.text().strip() or "Mon dépôt",
                 phone=self.phone_edit.text().strip() or None,
                 address=self.address_edit.text().strip() or None,
+                logo_path=self.logo_edit.text().strip() or None,
                 document_footer=self.footer_edit.text().strip() or None)
         except Exception as exc:
             QMessageBox.warning(self, "Paramètres", str(exc))
             return
         info(self, "Paramètres enregistrés.", "Paramètres")
+        return True
 
     # --- utilisateurs ---------------------------------------------------------
     def _build_users_tab(self) -> None:
@@ -296,6 +319,8 @@ class SettingsPage(Page):
         self.phone_edit.setText(settings.phone or "")
         self.address_edit.setText(settings.address or "")
         self.footer_edit.setText(settings.document_footer or "")
+        self.logo_edit.setText(settings.logo_path or "")
+        self.logo_label.setText(settings.logo_path or "Aucun logo")
         self._reload_payment_methods()
 
         self._users = admin.list_users()
@@ -448,7 +473,8 @@ class SettingsPage(Page):
         dialog.resize(560, 360)
         layout = QVBoxLayout(dialog)
         warning = QLabel("La base actuelle sera sauvegardée puis remplacée. "
-                         "L'opération est réservée aux administrateurs et tracée.")
+                         "L'opération est réservée aux administrateurs : saisissez "
+                         "le mot de passe du compte connecté pour confirmer.")
         warning.setWordWrap(True)
         warning.setStyleSheet("color: #B3261E;")
         layout.addWidget(warning)
@@ -456,6 +482,10 @@ class SettingsPage(Page):
         table.load([[c["name"], c["modified"].strftime("%d/%m/%Y %H:%M"),
                      f"{c['size'] / 1024:.0f} Ko"] for c in valid])
         layout.addWidget(table)
+        password = QLineEdit()
+        password.setEchoMode(QLineEdit.Password)
+        password.setPlaceholderText("Mot de passe de l'administrateur")
+        layout.addWidget(password)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Ok).setText("Restaurer")
         buttons.button(QDialogButtonBox.Cancel).setText("Annuler")
@@ -472,7 +502,11 @@ class SettingsPage(Page):
         if not confirm(self, "Confirmer la restauration ? L'application devra être "
                              "redémarrée."):
             return
-        self.services["backup"].restore(valid[row]["path"])
+        try:
+            self.services["backup"].restore(valid[row]["path"], password.text())
+        except Exception as exc:
+            QMessageBox.warning(self, "Restauration", str(exc))
+            return
         info(self, "Restauration terminée. Redémarrez l'application.",
              "Restauration")
         return True
