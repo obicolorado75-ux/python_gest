@@ -5,7 +5,7 @@
 | Phase | État | Contenu livré |
 |---|---|---|
 | 0 — Cadrage et prototype | ✅ fait | dépôt, base locale, fenêtre principale, lancement hors ligne, tests |
-| 1 — Fondations et catalogue | ✅ fait (P0) | architecture en couches, migrations, connexion, utilisateurs/rôles, paramètres, catégories, marques, unités, conditionnements, produits, tarifs, import contrôlé |
+| 1 — Fondations et catalogue | ✅ fait (P0) | architecture en couches, migrations, connexion (logo, mot de passe/PIN, limitation, journalisation), utilisateurs/rôles, paramètres, moyens de paiement configurables, catégories, marques, unités, conditionnements, produits, tarifs, import contrôlé |
 | 2 — Stocks, achats | ✅ P0 livré | journal immuable, soldes, CMP, fournisseurs, commandes (remise + frais d'approche), réceptions avec refus, paiements fournisseurs, inventaires, consignes et emballages |
 | 3 — Caisse et ventes | ✅ P0 livré | POS, panier, tarifs, remises, paiements mixtes, crédit, retours, annulations, ventes suspendues (F8), ticket |
 | 4 — Clients, livraisons, finances | 🟡 partiel | clients, crédits, relevés, paiements affectés, sessions de caisse, dépenses ; livraisons et commandes clients à faire (P1) |
